@@ -1,2 +1,2 @@
 # BARBECUES
-Basically Another Really Badly Enhanced Compressible Euler Solver
+Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver
