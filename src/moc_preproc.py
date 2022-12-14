@@ -2,7 +2,7 @@ import copy
 import math
 import numpy as np
 
-import comp_flow
+import compressible_flow_formulas
 import mesh_processing
 
 
@@ -81,7 +81,7 @@ def initialize_moc(mesh, config):
         l, _ = mesh_processing.edge_properties_calculator(zones[i][1], zones[i][2])
         theta = math.acos((zones[i][2, 0] - zones[i][1, 0]) / l) / 2 - (config.a * math.pi / 180)
         # Run OS calculation
-        os_results = comp_flow.obliqueshock(theta, mach_upstream, 1, 1, 1, config.y)
+        os_results = compressible_flow_formulas.obliqueshock(theta, mach_upstream, 1, 1, 1, config.y)
         additional_machs[i] = os_results['M2']
         # Set upstream to be post-OS
         mach_upstream = os_results['M2']
