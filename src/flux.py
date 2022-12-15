@@ -3,6 +3,7 @@ import numpy as np
 import helper
 import mesh_processing
 
+
 def F_euler_2d(u, fluid):
     """Computes the flux vector for the 2D compressible Euler equations from
     the state vector.
@@ -32,6 +33,7 @@ def F_euler_2d(u, fluid):
 
     return F
 
+# TODO: See if any sort of simplification can be done here to save compute time
 def roe_euler_2d(u_l, u_r, n, fluid):
     """Computes the Roe Flux from the left cell into the right cell for
     the inviscid Euler Equations
@@ -99,6 +101,7 @@ def roe_euler_2d(u_l, u_r, n, fluid):
     return flux, s_max
 
 
+# TODO: Check that this flux method actually works
 def hlle_euler_2d(u_l, u_r, n, fluid):
     """Computes the Roe Flux from the left cell into the right cell for
     the inviscid Euler Equations
@@ -148,6 +151,7 @@ def hlle_euler_2d(u_l, u_r, n, fluid):
     return flux, s_max
 
 
+# Look for methods of vectorization of edge information, fluxes, etc
 def compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n):
     """Computes the residuals and sum of speed*edge_lengths for the state on the given mesh using the Roe Flux method.
 
@@ -212,6 +216,7 @@ def compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n):
     return residuals, sum_sl
 
 
+# TODO: Fix Roe Flux then copy Roe flux code here and swap Roe calls to HLLE calls
 def compute_residuals_hlle(config, mesh, state):
     """Computes the residuals and sum of speed*edge_lengths for the state on the given mesh using the HLLE Flux method.
 

@@ -8,7 +8,7 @@ import plotmesh
 import numpy as np
 import timeit
 
-
+# TODO: Do this last - clean up main function to fit JSON, better file IO, better AMR looping, etc.
 def main():
     # Configuration for the CFD run
     op_con = operating_conditions(30000)

@@ -1,11 +1,9 @@
-import copy
 import math
 import numpy as np
-
 import compressible_flow_formulas
 import mesh_processing
 
-
+# Reformat, vecotirze, simplify
 def initialize_moc(mesh, config):
     """Initializes initial condition using the MOC-OS approach where the characteristic lines and their reflections are
     used to find locations of oblique shocks.
@@ -98,7 +96,7 @@ def initialize_moc(mesh, config):
 
     return state
 
-
+# TODO: Comment and document
 def moc_inflow(mesh, config):
     """Generates a N-length list of 2D arrays that contain the initial line segments left-running characteristic lines.
 
@@ -135,7 +133,7 @@ def moc_inflow(mesh, config):
 
     return moc_lines
 
-
+# TODO: Generisize the reflection process and have the shocks built into the reflections
 def moc_reflect(mesh, config, moc_lines):
     """Specularly reflects the characteristic lines off the walls of the flow and continues to march them downstream.
 
@@ -291,7 +289,7 @@ def moc_reflect(mesh, config, moc_lines):
 
     return moc_lines
 
-
+# TODO: Find faster algorithm that doesn't require linear algebra
 def check_intersection2(q, qs, p, pr):
     """Returns the point of intersection if the line segment from p1 -> p2 and p3 -> p4 intersect, None if not
 
@@ -325,7 +323,7 @@ def check_intersection2(q, qs, p, pr):
     else:
         return np.array((None, None))
 
-
+# TODO: Move this to initialization file
 def init_state_mach(m, config):
     """Initializes the state vector for a local mach number in that state.
 

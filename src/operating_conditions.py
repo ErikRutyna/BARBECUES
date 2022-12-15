@@ -1,6 +1,6 @@
 from skaero.atmosphere import coesa
 
-
+# TODO: Convert this to JSON format
 class operating_conditions:
     def __init__(self, h):
         # Program control flags

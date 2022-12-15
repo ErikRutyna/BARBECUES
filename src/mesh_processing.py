@@ -14,6 +14,7 @@ def centroid(cells, vertices):
     :param vertices: NP array of elements with their vertices
     :return: X, Y - NP arrays that contain X-Y coordinate pairs of "centroid" of the cell
     """
+    # TODO: Vectorize with Numpy
     X = np.zeros((len(cells)))
     Y = np.zeros((len(cells)))
 
@@ -38,6 +39,7 @@ def edge_properties_calculator(node_a, node_b):
     :return length: Length of the edge from A->B
     :return norm: Normal vector out of the edge in CCW fashion: [nx, ny]
     """
+    # TODO: Vectorize w/ numpy and have it do all edges at once and not a single edge
     length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
     norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
 
@@ -50,6 +52,7 @@ def area_calculator(mesh):
     :param mesh: The mesh of the problem holding all cells.
     :return area: Area of the cells
     """
+    # TODO: Vectorize with Numpy and have it do all cells at once
     area = np.zeros(mesh['E'].shape[0])
     for i in range(mesh['E'].shape[0]):
         nodes = mesh['E'][i]
@@ -64,7 +67,7 @@ def area_calculator(mesh):
         area[i] = math.sqrt(s * (s - a) * (s - b) * (s - c))
     return area
 
-
+# TODO: Break the initialization methods into their own file
 def initialize_boundary(mesh, config):
     """Initializes the solution by setting everything based on the freestream
     mach number.
@@ -139,7 +142,7 @@ def initialize_boundary_dist(mesh, config):
 
     return initial_condition
 
-
+# TODO: Break the AMR into its own file
 def reorient_ccw(node1, node2, node3, node_list):
     """Re-orients the given set of nodes to be in a counter-clockwise order
 
@@ -160,7 +163,7 @@ def reorient_ccw(node1, node2, node3, node_list):
     else:
         return np.array([node3, node2, node1])
 
-
+# TODO: Remake another form with standard flagged-edge splitting 1 half, 2 largest angle, 3 uniform
 def refine_interp_uniform(mesh, state, fname, config):
     """Performs adaptive mesh refinement on the given mesh from the results of the state vector and large jumps in Mach
     number across cell boundaries. Divides flagged cells uniformly, cells w/ >= 2 neighbors flagged uniformly, and cells
@@ -288,7 +291,7 @@ def refine_interp_uniform(mesh, state, fname, config):
 
     return mesh, state
 
-
+# TODO: Vectorize out loops if possible using logical indexing - speed up computation time
 def find_uniform_splitting(state, mesh, config):
     """Creates a unique array of cell indices that are to be split uniformly and split to maintain conformity. Any cell
     that has 2 uniform neighbors becomes a uniform cell, this process continues until either all cells are uniform or
