@@ -1,6 +1,4 @@
 import os
-import datetime
-import moc_preproc
 import moc_preproc as mpp
 import readgri
 import mesh_processing
@@ -32,7 +30,7 @@ def main():
 
     start_time = timeit.default_timer()
     # Solution Initialization
-    state_variables = moc_preproc.initialize_moc(mesh, op_con)  # [rho, rho*u, rho*v, rho*E]
+    state_variables = mpp.initialize_moc(mesh, op_con)  # [rho, rho*u, rho*v, rho*E]
     # state_variables = mesh_processing.initialize_boundary(mesh, op_con) # [rho, rho*u, rho*v, rho*E]
 
     plotmesh.plot_mach(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_mach_ns.png'
