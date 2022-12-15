@@ -3,20 +3,28 @@ import numpy as np
 import helper
 
 
-def plotmesh(Mesh, fname):
+def plot_mesh(Mesh, fname):
+    """Plots the mesh and the different boundary conditions in their respective colors.
+
+    :param Mesh: Mesh dictionary
+    :param fname: filename for what the figure is saved under
+    """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     f = plt.figure(figsize=(12,12))
-    # plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=value, shading='flat')
-    plt.triplot(V[:,0], V[:,1], E, 'k-')
-    E2 = []
-    for ie in Mesh['IE']:
-        if not ie[2] in E2:
-            E2.append(ie[2])
-        if not ie[3] in E2:
-            E2.append(ie[3])
-    # plt.scatter(V[:, 0], V[:, 1], color='red')
+    # Plots all the triangles in the mesh in black
+    plt.triplot(V[:,0], V[:,1], E, '-', color='black')
+
+    # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
-        plt.plot(V[BE[i,0:2],0],V[BE[i,0:2],1], '-', linewidth=2, color='red')
+        if Mesh['Bname'][BE[i, 3]] == 'Wall':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='magenta')
+        elif Mesh['Bname'][BE[i, 3]] == 'Inflow':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='red')
+        elif Mesh['Bname'][BE[i, 3]] == 'Outflow':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='blue')
+        elif Mesh['Bname'][BE[i, 3]] == 'Exit':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='cyan')
+
     plt.axis('equal')
     plt.tick_params(axis='both', labelsize=12)
     f.tight_layout()
@@ -24,75 +32,108 @@ def plotmesh(Mesh, fname):
     plt.close(f)
 
 
-def plotmesh_values(Mesh, state, fluid, fname):
+def plot_mach(Mesh, state, fluid, fname):
+    """Contour/tricolor plot of the Mach number at each cell in the mesh.
+
+    :param Mesh: Mesh dictionary
+    :param state: Nx4 state vectory array
+    :param fluid: working fluid information to get ratio of specific heats
+    :param fname: filename for what the figure is saved under
+    """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     figure = plt.figure(figsize=(12, 12))
 
+    # Calculate Mach numbers to plot
     mach = helper.calculate_mach(state, fluid)
-    stag_pres = helper.calculate_stagnation_pressure(state, mach, fluid)
-    # Stagnation Pressure Recovery Factor - ATPR
-    stag_pres_recovered = helper.calculate_atpr(stag_pres, Mesh)
 
-    # Mach number
-    mach_plot = plt.subplot(2, 1, 1)
-    mach_plot.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=mach, shading='flat', cmap='jet')
-    # mach_plot.triplot(V[:,0], V[:,1], E, 'k-')
-    mach_plot.autoscale(enable=None, axis="x", tight=True)
-    mach_plot.autoscale(enable=None, axis="y", tight=True)
-    mach_plot.tick_params(axis='both', labelsize=12)
-    mach_plot.set_title('Mach # Contours')
-    # Some code off of stack exchange to get colorbars to show - I fucking hate plotting with matplotlib
-    # and I'm not sure how it works, but it does, so I'll take it
+    # Mach number contour plotting
+    plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=mach, shading='flat', cmap='jet')
+    plt.autoscale(enable=None, axis="x", tight=True)
+    plt.autoscale(enable=None, axis="y", tight=True)
+    plt.tick_params(axis='both', labelsize=12)
+    plt.title('Mach number')
+    # Forces the colorbar to show - I don't know how it works, I got it off of stack exchange
     ax = plt.gca()  # get the current axes
     for PCM in ax.get_children():
         if isinstance(PCM, plt.cm.ScalarMappable):
             break
     plt.colorbar(PCM, ax=ax)
 
-    # Stagnation Pressure
-    stag_plot = plt.subplot(2, 1, 2)
-    stag_plot.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=np.divide(stag_pres, max(stag_pres)), shading='flat', cmap='jet')
-    stag_plot.triplot(V[:,0], V[:,1], E, 'k-')
-    stag_plot.autoscale(enable=None, axis="x", tight=True)
-    stag_plot.autoscale(enable=None, axis="y", tight=True)
-    stag_plot.tick_params(axis='both', labelsize=12)
-    stag_plot.set_title('Total Pressure Contours - ATPR: {0}'.format(stag_pres_recovered))
-    ax = plt.gca()  # get the current axes
-    for PCM in ax.get_children():
-        if isinstance(PCM, plt.cm.ScalarMappable):
-            break
-    plt.colorbar(PCM, ax=ax)
-
+    # Save and close configurations
+    plt.axis('equal')
+    plt.tick_params(axis='both', labelsize=12)
     figure.tight_layout()
     plt.savefig(fname)
     plt.close(figure)
 
 
-def plot_mesh_flagged(Mesh, Mesh2, flagged_cells):
+def plot_stagnation_pressure(Mesh, state, fluid, fname):
+    """Contour/tricolor plot of the stagnation pressure at each cell in the mesh.
+
+    :param Mesh: Mesh dictionary
+    :param state: Nx4 state vectory array
+    :param fluid: working fluid information to get ratio of specific heats
+    :param fname: filename for what the figure is saved under
+    """
+    V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
+    figure = plt.figure(figsize=(12, 12))
+
+    # Calculating the stagnation pressure
+    mach = helper.calculate_mach(state, fluid)
+    stagnation_pressure = helper.calculate_stagnation_pressure(state, mach, fluid)
+    normalized_stagnation_pressure = np.divide(stagnation_pressure, max(stagnation_pressure))
+    ATPR = helper.calculate_atpr(normalized_stagnation_pressure, Mesh)
+
+    # Stagnation pressure contour plotting
+    plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=normalized_stagnation_pressure, shading='flat', cmap='jet')
+    plt.autoscale(enable=None, axis="x", tight=True)
+    plt.autoscale(enable=None, axis="y", tight=True)
+    plt.tick_params(axis='both', labelsize=12)
+    plt.title('Stagnation Pressure - ATPR @ Exit = {0}'.format(ATPR))
+    ax = plt.gca()  # get the current axes
+    for PCM in ax.get_children():
+        if isinstance(PCM, plt.cm.ScalarMappable):
+            break
+    plt.colorbar(PCM, ax=ax)
+
+    # Save and close configurations
+    plt.axis('equal')
+    plt.tick_params(axis='both', labelsize=12)
+    figure.tight_layout()
+    plt.savefig(fname)
+    plt.close(figure)
+
+
+def plot_mesh_flagged(Mesh, flagged_cells, fname):
+    """Plots the mesh and also highlights the cells flagged for refinement.
+
+    :param Mesh: Mesh dictionary
+    :param flagged_cells: Flagged cell indices
+    :param fname: Filename for what the figure is saved under
+    """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     f = plt.figure(figsize=(12,12))
-    # plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=value, shading='flat')
-    plt.triplot(V[:,0], V[:,1], E, 'k-')
-    plt.triplot(V[:, 0], V[:, 1], Mesh2['E'][flagged_cells], 'b-')
-    # plt.triplot(V[:, 0], V[:, 1], Mesh['E'][np.array([411, 416, 436, 443, 450, 475, 488, 501, 509, 514, 522,
-    #        539, 543, 579, 656, 658, 666, 1553, 1573, 1578, 1588, 1595,
-    #        1600, 1607, 1611, 1620, 1627, 1633, 1639, 1648, 1665, 1677, 1699,
-    #        1709, 1720, 1735], dtype=int)], 'g-')
+    # Plotting the mesh
+    plt.triplot(V[:,0], V[:,1], E, '-', color='black')
+    # Emphasize the boundary edges of the domain
     for i in range(BE.shape[0]):
         plt.plot(V[BE[i,0:2],0],V[BE[i,0:2],1], '-', linewidth=2, color='black')
+    # Plotting the flagged cells
+    plt.triplot(V[:, 0], V[:, 1], Mesh['E'][flagged_cells], '-', color='red')
+
+    # Save and close configurations
     plt.axis('equal')
     plt.tick_params(axis='both', labelsize=12)
     f.tight_layout()
-    plt.savefig('flagged_cells.png')
+    plt.savefig(fname)
     plt.close(f)
 
 
 def plot_grid(nodes, fname):
-    """Plots the 2D grid of nodes in a simple plot - nothing fancy.
+    """Scatter plot of the nodes for a given mesh.
 
     :param nodes: [x, y] coordinate pairs of all node locations
-    :param fname: Filename to save the figure as
-    :return: Nothing - saves a file in the current directory
+    :param fname: Filename for what the figure is saved under
     """
     f = plt.figure(figsize=(12, 12))
     plt.scatter(x=nodes[:, 0], y=nodes[:, 1])
@@ -101,18 +142,35 @@ def plot_grid(nodes, fname):
     f.tight_layout()
     plt.savefig(fname)
     plt.close(f)
-    return
+
 
 def plot_moc(Mesh, moc, fname):
-    V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
+    """Plots the characteristic lines as they reflect off of the walls in the domain when a MOC initialization is
+    performed.
+
+    :param Mesh: Mesh dictionary
+    :param moc: List of characteristic lines and their reflection points
+    :param fname: Filename for what the figure is saved under
+    """
+    V = Mesh['V']; BE = Mesh['BE']
     f = plt.figure(figsize=(12,12))
+    # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
-        plt.plot(V[BE[i,0:2],0],V[BE[i,0:2],1], '-', linewidth=2, color='red')
+        if Mesh['Bname'][BE[i, 3]] == 'Wall':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='magenta')
+        elif Mesh['Bname'][BE[i, 3]] == 'Inflow':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='red')
+        elif Mesh['Bname'][BE[i, 3]] == 'Outflow':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='blue')
+        elif Mesh['Bname'][BE[i, 3]] == 'Exit':
+            plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='cyan')
+
     for i in range(len(moc)):
-        plt.plot(moc[i][:, 0], moc[i][:, 1], linewidth=0.5, color='blue')
+        plt.plot(moc[i][:, 0], moc[i][:, 1], linewidth=0.5, color='green')
+
+    # Save and close configurations
     plt.axis('equal')
     plt.tick_params(axis='both', labelsize=12)
     f.tight_layout()
     plt.savefig(fname)
     plt.close(f)
-    return

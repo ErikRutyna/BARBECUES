@@ -23,20 +23,26 @@ def main():
     # Grid pre-processing
     mesh = readgri.readgri(os.path.join(mesh_dir, mesh_file)) # Mesh loading
     mesh_filename = 'inlet' + '.png'
-    plotmesh.plotmesh(mesh, mesh_filename)
+    plotmesh.plot_mesh(mesh, mesh_filename)
 
     # Checking Characteristic Lines
-    # moc_lines = mpp.moc_inflow(mesh, op_con)
-    # moc_lines = mpp.moc_reflect(mesh, op_con, moc_lines)
-    # plotmesh.plot_moc(mesh, moc_lines, 'mesh_moc.png')
+    moc_lines = mpp.moc_inflow(mesh, op_con)
+    moc_lines = mpp.moc_reflect(mesh, op_con, moc_lines)
+    plotmesh.plot_moc(mesh, moc_lines, 'mesh_moc.png')
 
     start_time = timeit.default_timer()
     # Solution Initialization
-    # state_variables = moc_preproc.initialize_moc(mesh, op_con)  # [rho, rho*u, rho*v, rho*E]
-    state_variables = mesh_processing.initialize_boundary(mesh, op_con) # [rho, rho*u, rho*v, rho*E]
+    state_variables = moc_preproc.initialize_moc(mesh, op_con)  # [rho, rho*u, rho*v, rho*E]
+    # state_variables = mesh_processing.initialize_boundary(mesh, op_con) # [rho, rho*u, rho*v, rho*E]
 
-    plotmesh.plotmesh_values(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_not_solved.png'
-                             .format(op_con.flux_method, op_con.M, op_con.a))
+    plotmesh.plot_mach(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_mach_ns.png'
+                       .format(op_con.flux_method, op_con.M, op_con.a))
+    plotmesh.plot_stagnation_pressure(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_p0_ns.png'
+                       .format(op_con.flux_method, op_con.M, op_con.a))
+    plotmesh.plot_grid(mesh['V'], 'inlet_{0}_M{1}_a{2}_grid.png'.format(op_con.flux_method, op_con.M, op_con.a))
+    plotmesh.plot_mesh_flagged(mesh, [400, 500, 700], 'inlet_{0}_M{1}_a{2}_p0_ns.png'
+                       .format(op_con.flux_method, op_con.M, op_con.a))
+
     if op_con.adaptation:
         # Initial solve
         print('\nPerforming initial solve on initial mesh\n')
@@ -52,9 +58,9 @@ def main():
 
             # Save the new mesh and interpolated state figures
             mesh_filename = 'mesh' + str(i+1) + '.png'
-            plotmesh.plotmesh(mesh, mesh_filename)
-            plotmesh.plotmesh_values(mesh, state_variables, op_con, '{0}_M{1}_a{2}_interpolated_{3}.png'
-                                     .format(op_con.flux_method, op_con.M, op_con.a, i))
+            plotmesh.plot_mesh(mesh, mesh_filename)
+            plotmesh.plot_mach(mesh, state_variables, op_con, '{0}_M{1}_a{2}_interpolated_{3}.png'
+                               .format(op_con.flux_method, op_con.M, op_con.a, i))
 
             # Solve on the new computational domain
             print('\nSolving on mesh: {0}\n'.format(i+1))
@@ -67,8 +73,8 @@ def main():
             np.savetxt("mesh7_state.txt", state_variables)
 
     # Post-Processing - Plotting
-    plotmesh.plotmesh_values(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_solved.png'
-                             .format(op_con.flux_method, op_con.M, op_con.a))
+    plotmesh.plot_mach(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_solved.png'
+                       .format(op_con.flux_method, op_con.M, op_con.a))
     print('Simulation complete - check results files. Time to run: {0} seconds'.
           format(timeit.default_timer() - start_time))
 
