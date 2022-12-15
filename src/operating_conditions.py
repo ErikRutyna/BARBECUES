@@ -4,9 +4,9 @@ from skaero.atmosphere import coesa
 class operating_conditions:
     def __init__(self, h):
         # Program control flags
-        self.restart_files =        True # Toggle on/off making restart files
+        self.restart_files =        False # Toggle on/off making restart files
         self.adaptation =           False # Toggle on/off adaptation algorithm
-        self.adaptation_percentage = 0.1 # Toggle on/off adaptation refinement limits
+        self.adaptation_percentage = 0.05 # Toggle on/off adaptation refinement limits
         self.smart_convergence =    True # Toggle on/off smart convergence criteria
         self.flux_method =          'roe' # Which flux method used in the solver - 'roe'/'hlle'
 
@@ -18,11 +18,11 @@ class operating_conditions:
             self.adaptation_cycles = 1
             pass
         else:
-            self.adaptation_cycles = 5    # If we are adapting, the number of adaptation cycles
+            self.adaptation_cycles = 2    # If we are adapting, the number of adaptation cycles
 
         # Initial conditions
-        self.M = 3    # Freestream Mach number
-        self.a = 2.0    # Vehicle AoA
+        self.M = 2    # Freestream Mach number
+        self.a = 10.0    # Vehicle AoA
         # Altitude, temperature, pressure, and density
         self.h, self.temp, self.pres, self.rho = coesa.table(h)
 

@@ -68,8 +68,8 @@ def euler_2D(sim_config, freestream_config, fluid, mesh, state):
 
                 else: # Inflow boundary condition
                     # Inflow conditions use a "freestream" cell
-                    be_flux, s = flux.roe_euler_2d(state[be[2]], helper.freestream_state(freestream_config, fluid), be_normal, fluid)
-                    be_flux2, s2 = flux.compFlux(be_normal, state[be[2]], helper.freestream_state(freestream_config, fluid))
+                    be_flux, s = flux.roe_euler_2d(state[be[2]], helper.generate_freestream_state(freestream_config, fluid), be_normal, fluid)
+                    be_flux2, s2 = flux.compFlux(be_normal, state[be[2]], helper.generate_freestream_state(freestream_config, fluid))
 
                     residuals[be[2]] += np.array(be_flux2) * be_length
                     # print(be , '\t' , residuals[be[2]].round(14))
@@ -167,8 +167,8 @@ def euler_2D_v2(config, mesh, state):
 
         residuals_norm.append(np.linalg.norm(residuals, ord=1))
 
-        stagnation_pressure_temp = helper.calc_stag_pres(state, helper.mach_calc(state, config), config)
-        atrp_temp.append(helper.calc_atpr(stagnation_pressure_temp, mesh))
+        stagnation_pressure_temp = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state, config), config)
+        atrp_temp.append(helper.calculate_atpr(stagnation_pressure_temp, mesh))
 
         # Check for convergence, either "smart" or standard
         if config.smart_convergence:
@@ -177,8 +177,8 @@ def euler_2D_v2(config, mesh, state):
                 # Calculate ATRP and add to back of array, if above size - pop first value off
                 if len(atrp) == config.sma_counter:
                     atrp.pop(0)
-                stagnation_pressure = helper.calc_stag_pres(state, helper.mach_calc(state, config), config)
-                atrp.append(helper.calc_atpr(stagnation_pressure, mesh))
+                stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state, config), config)
+                atrp.append(helper.calculate_atpr(stagnation_pressure, mesh))
 
                 # Check if recent result difference is less than simple moving average - if so we can call it converged
                 if len(atrp) == config.sma_counter and \
