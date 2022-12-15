@@ -54,11 +54,11 @@ def roe_euler_2d(u_l, u_r, n, fluid):
 
     # flux_left = F_euler_2d(u_l, fluid)
     # h_left = (flux_left[3][0] + flux_left[3][1]) / (flux_left[0][0] + flux_left[0][1])
-    h_left = (u_l[3] + helper.calc_pressure(u_l, fluid)) / u_l[0]
+    h_left = (u_l[3] + helper.calculate_static_pressure_single(u_l, fluid)) / u_l[0]
 
     # flux_right = F_euler_2d(u_r, fluid)
     # h_right = (flux_right[3][0] + flux_right[3][1]) / (flux_right[0][0] + flux_right[0][1])
-    h_right = (u_r[3] + helper.calc_pressure(u_r, fluid)) / u_r[0]
+    h_right = (u_r[3] + helper.calculate_static_pressure_single(u_r, fluid)) / u_r[0]
 
     roe_avg_h = (math.sqrt(u_l[0]) * h_left + math.sqrt(u_r[0]) * h_right) / (math.sqrt(u_l[0]) + math.sqrt(u_r[0]))
 
@@ -122,8 +122,8 @@ def hlle_euler_2d(u_l, u_r, n, fluid):
     q_l = np.linalg.norm(vel_l)
     q_r = np.linalg.norm(vel_r)
 
-    h_left = (u_l[3] + helper.calc_pressure(u_l, fluid)) / u_l[0]
-    h_right= (u_r[3] + helper.calc_pressure(u_r, fluid)) / u_r[0]
+    h_left = (u_l[3] + helper.calculate_static_pressure(u_l, fluid)) / u_l[0]
+    h_right= (u_r[3] + helper.calculate_static_pressure(u_r, fluid)) / u_r[0]
 
     c_l = math.sqrt((fluid.y - 1) * (h_left - q_l ** 2 / 2))
     c_r = math.sqrt((fluid.y - 1) * (h_right - q_r ** 2 / 2))
@@ -191,7 +191,7 @@ def compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n):
 
             # Enforcing no flow through with pressure condition
             be_flux = [0, be_pressure * be_n[i, 0], be_pressure * be_n[i, 1], 0]
-            local_p = helper.calc_pressure(state[mesh['BE'][i, 2]], config)
+            local_p = helper.calculate_static_pressure_single(state[mesh['BE'][i, 2]], config)
             h = (state[mesh['BE'][i, 2], 3] + local_p) / state[mesh['BE'][i, 2], 0]
             be_smax = abs(u_plus * be_n[i, 0] + v_plus * be_n[i, 1]) \
                       + math.sqrt((config.y - 1) * (h - np.linalg.norm([u_plus, v_plus]) ** 2 / 2))
@@ -203,8 +203,8 @@ def compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n):
 
         elif mesh['Bname'][mesh['BE'][i, 3]] == 'Inflow':
             # Apply freestream inflow boundary conditions
-            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], helper.freestream_state(config),
-                                                    be_n[i], config)
+            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], helper.generate_freestream_state(config),
+                                            be_n[i], config)
 
         residuals[mesh['BE'][i, 2]] += np.array(be_flux) * be_l[i]
         sum_sl[mesh['BE'][i, 2]] += be_smax * be_l[i]
@@ -267,8 +267,8 @@ def compute_residuals_hlle(config, mesh, state):
 
         elif mesh['Bname'][be[3]] == 'Inflow':
             # Apply freestream inflow boundary conditions
-            be_flux, be_smax = hlle_euler_2d(state[be[2]], helper.freestream_state(config),
-                                                    be_n, config)
+            be_flux, be_smax = hlle_euler_2d(state[be[2]], helper.generate_freestream_state(config),
+                                             be_n, config)
 
         residuals[be[2]] += np.array(be_flux) * be_l
         sum_sl[be[2]] += be_smax * be_l

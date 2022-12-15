@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-from readgri import readgri
 import numpy as np
 import helper
 
@@ -23,15 +22,16 @@ def plotmesh(Mesh, fname):
     f.tight_layout()
     plt.savefig(fname)
     plt.close(f)
-#-----------------------------------------------------------------------------------------------------------------------
+
+
 def plotmesh_values(Mesh, state, fluid, fname):
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     figure = plt.figure(figsize=(12, 12))
 
-    mach = helper.mach_calc(state, fluid)
-    stag_pres = helper.calc_stag_pres(state, mach, fluid)
+    mach = helper.calculate_mach(state, fluid)
+    stag_pres = helper.calculate_stagnation_pressure(state, mach, fluid)
     # Stagnation Pressure Recovery Factor - ATPR
-    stag_pres_recovered = helper.calc_atpr(stag_pres, Mesh)
+    stag_pres_recovered = helper.calculate_atpr(stag_pres, Mesh)
 
     # Mach number
     mach_plot = plt.subplot(2, 1, 1)
@@ -116,13 +116,3 @@ def plot_moc(Mesh, moc, fname):
     plt.savefig(fname)
     plt.close(f)
     return
-
-#-----------------------------------------------------------------------------------------------------------------------
-
-
-def main():
-    Mesh = readgri('mesh0.gri')
-    plotmesh(Mesh, [])
-
-if __name__ == "__main__":
-    main()

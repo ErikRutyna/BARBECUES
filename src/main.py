@@ -15,14 +15,13 @@ def main():
     # Configuration for the CFD run
     op_con = operating_conditions(30000)
 
-    mesh_folder = 'Inlets'
-    mesh_file = 'mesh3.gri'
+    mesh_file = 'mesh0.gri'
 
-    run_dir = os.getcwd()
+    run_dir = os.path.dirname(os.getcwd())
     mesh_dir = os.path.join(run_dir, 'Meshes')
 
     # Grid pre-processing
-    mesh = readgri.readgri(os.path.join(mesh_dir, mesh_folder, mesh_file)) # Mesh loading
+    mesh = readgri.readgri(os.path.join(mesh_dir, mesh_file)) # Mesh loading
     mesh_filename = 'inlet' + '.png'
     plotmesh.plotmesh(mesh, mesh_filename)
 
