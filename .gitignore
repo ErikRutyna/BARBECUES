@@ -1,4 +1,4 @@
 Meshes/*
 .idea/*
 git_commands.txt
-src/__pycache__/*
+src/__pycache__
