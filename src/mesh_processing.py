@@ -7,28 +7,15 @@ import flux
 import readgri
 
 
-def centroid(cells, vertices):
-    """Returns an array of X and Y coordinates for each cell.
+def centroid(mesh):
+    """Returns an array of centroids for all cells in the mesh.
 
-    :param cells: NP array of vertex coordinate locations
-    :param vertices: NP array of elements with their vertices
-    :return: X, Y - NP arrays that contain X-Y coordinate pairs of "centroid" of the cell
+    :param mesh: Mesh in dictionary format
+    :return: centroids of all cells in mesh
     """
-    # TODO: Vectorize with Numpy
-    X = np.zeros((len(cells)))
-    Y = np.zeros((len(cells)))
+    centroids = np.sum(mesh['V'][mesh['E']], axis=1) / 3
 
-    for K in range(len(cells)):
-        # X & Y coordinates for each cell's vertices
-        x = vertices[cells[K]][:, 0]
-        y = vertices[cells[K]][:, 1]
-
-        # Forumla for centroid of a triangle:
-        # https://byjus.com/maths/centroid-of-a-triangle/
-        X[K] = np.sum(x) / len(x)
-        Y[K] = np.sum(y) / len(y)
-
-    return X, Y
+    return centroids
 
 
 def edge_properties_calculator(node_a, node_b):
@@ -39,7 +26,7 @@ def edge_properties_calculator(node_a, node_b):
     :return length: Length of the edge from A->B
     :return norm: Normal vector out of the edge in CCW fashion: [nx, ny]
     """
-    # TODO: Vectorize w/ numpy and have it do all edges at once and not a single edge
+
     length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
     norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
 
@@ -67,80 +54,7 @@ def area_calculator(mesh):
         area[i] = math.sqrt(s * (s - a) * (s - b) * (s - c))
     return area
 
-# TODO: Break the initialization methods into their own file
-def initialize_boundary(mesh, config):
-    """Initializes the solution by setting everything based on the freestream
-    mach number.
 
-    :param mesh: Dictionary that contains mesh information
-    :param config: Config file for simulation containing information regarding fluid and freestream information
-    :return: initial_condition: np.array of the initial condition of the mesh
-    """
-    initial_condition = np.zeros((len(mesh['E']), 4))
-
-    initial_condition[:, 0] = 1  # Rho
-    initial_condition[:, 1] = config.M * math.cos(config.a * math.pi / 180) # Rho*U
-    initial_condition[:, 2] = config.M * math.sin(config.a * math.pi / 180) # Rho*V
-    initial_condition[:, 3] = 1 / (config.y - 1) / config.y + (config.M) ** 2 / 2 # Rho*E
-
-    return initial_condition
-
-def initialize_boundary_weak(mesh, config):
-    """Initializes the solution by setting everything based on the freestream
-    mach number.
-
-    :param mesh: Dictionary that contains mesh information
-    :param config: Config file for simulation containing information regarding fluid and freestream information
-    :return: initial_condition: np.array of the initial condition of the mesh
-    """
-    m = config.M / 2
-    initial_condition = np.zeros((len(mesh['E']), 4))
-
-    initial_condition[:, 0] = 1  # Rho
-    initial_condition[:, 1] = m * math.cos(config.a * math.pi / 180) # Rho*U
-    initial_condition[:, 2] = m * math.sin(config.a * math.pi / 180) # Rho*V
-    initial_condition[:, 3] = 1 / (config.y - 1) / config.y + (m) ** 2 / 2 # Rho*E
-
-    return initial_condition
-
-
-def initialize_boundary_dist(mesh, config):
-    """Initializes the solution by setting everything based on the freestream
-    mach number.
-
-    :param mesh: Dictionary that contains mesh information
-    :param config: Config file for simulation containing information regarding fluid and freestream information
-    :return: initial_condition: np.array of the initial condition of the mesh
-    """
-    initial_condition = np.zeros((mesh['E'].shape[0], 4))
-    x_min = (mesh['V'][:, 0]).min()
-    x_max = (mesh['V'][:, 0]).max()
-    y_min = (mesh['V'][:, 1]).min()
-    y_max = (mesh['V'][:, 1]).max()
-
-    for i in range(mesh['E'].shape[0]):
-        centroid = (mesh['V'][mesh['E'][i, 0]] + mesh['V'][mesh['E'][i, 1]] + mesh['V'][mesh['E'][i, 2]]) / 3
-
-        if centroid[0] <= 0:
-            x_scale = centroid[0] / x_min
-        else:
-            x_scale = centroid[0] / x_max
-
-        if centroid[1] <= 0:
-            y_scale = centroid[1] / y_min
-        else:
-            y_scale = centroid[1] / y_max
-
-        avg_scale = (x_scale + y_scale) / 2
-
-        m_init = config.M * avg_scale
-
-        initial_condition[i, 0] = 1  # Rho
-        initial_condition[i, 1] = m_init * math.cos(config.a * math.pi / 180) # Rho*U
-        initial_condition[i, 2] = m_init * math.sin(config.a * math.pi / 180) # Rho*V
-        initial_condition[i, 3] = 1 / (config.y - 1) / config.y + (m_init) ** 2 / 2 # Rho*E
-
-    return initial_condition
 
 # TODO: Break the AMR into its own file
 def reorient_ccw(node1, node2, node3, node_list):

@@ -9,6 +9,7 @@ class operating_conditions:
         self.adaptation_percentage = 0.05 # Toggle on/off adaptation refinement limits
         self.smart_convergence =    True # Toggle on/off smart convergence criteria
         self.flux_method =          'roe' # Which flux method used in the solver - 'roe'/'hlle'
+        self.smart_convergence_minimum = 1e-2
 
         if self.smart_convergence:
             self.sma_counter = 42

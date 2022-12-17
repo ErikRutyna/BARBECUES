@@ -2,6 +2,7 @@ import math
 import numpy as np
 import compressible_flow_formulas
 import mesh_processing
+import initialization as intlzn
 
 # Reformat, vecotirze, simplify
 def initialize_moc(mesh, config):
@@ -89,16 +90,16 @@ def initialize_moc(mesh, config):
         for j in range(len(zones)):
             if zones[j][0, 0] <= centroids[i, 0] <= zones[j][2, 0] and \
                     zones[j][0, 1] <= centroids[i, 1] <= zones[j][1, 1]:
-                state[i, :] = init_state_mach(additional_machs[j], config)
+                state[i, :] = intlzn.init_state_mach(additional_machs[j], config)
                 break
             else:
-                state[i, :] = init_state_mach(config.M, config)
+                state[i, :] = intlzn.init_state_mach(config.M, config)
 
     return state
 
 # TODO: Comment and document
 def moc_inflow(mesh, config):
-    """Generates a N-length list of 2D arrays that contain the initial line segments left-running characteristic lines.
+    """Generates an N-length list of 2D arrays that contain the initial line segments left-running characteristic lines.
 
     :param mesh: Read in *.gri mesh
     :param config: Config file
@@ -322,19 +323,3 @@ def check_intersection2(q, qs, p, pr):
         return intersection
     else:
         return np.array((None, None))
-
-# TODO: Move this to initialization file
-def init_state_mach(m, config):
-    """Initializes the state vector for a local mach number in that state.
-
-    :param m: Local cell's Mach number
-    :return:
-    """
-    initial_condition = np.zeros((4))
-
-    initial_condition[0] = 1  # Rho
-    initial_condition[1] = m * math.cos(config.a * math.pi / 180)# Rho*U
-    initial_condition[2] = m * math.sin(config.a * math.pi / 180) # Rho*V
-    initial_condition[3] = 1 / (config.y - 1) / config.y + (m ** 2) / 2 # Rho*E
-
-    return initial_condition

@@ -7,6 +7,7 @@ import residual_assembly as ra
 import plotmesh
 import numpy as np
 import timeit
+import initialization as intlzn
 
 # TODO: Do this last - clean up main function to fit JSON, better file IO, better AMR looping, etc.
 def main():
@@ -31,7 +32,7 @@ def main():
     start_time = timeit.default_timer()
     # Solution Initialization
     state_variables = mpp.initialize_moc(mesh, op_con)  # [rho, rho*u, rho*v, rho*E]
-    # state_variables = mesh_processing.initialize_boundary(mesh, op_con) # [rho, rho*u, rho*v, rho*E]
+    # state_variables = intlzn.initialize_boundary(mesh, op_con) # [rho, rho*u, rho*v, rho*E]
 
     plotmesh.plot_mach(mesh, state_variables, op_con, 'inlet_{0}_M{1}_a{2}_mach_ns.png'
                        .format(op_con.flux_method, op_con.M, op_con.a))
