@@ -1,62 +1,10 @@
-import itertools
-
+import cell_geometry_formulas as cgf
 import numpy as np
 import math
-import copy
-import flux
 import readgri
+import flux
 
 
-def centroid(mesh):
-    """Returns an array of centroids for all cells in the mesh.
-
-    :param mesh: Mesh in dictionary format
-    :return: centroids of all cells in mesh
-    """
-    centroids = np.sum(mesh['V'][mesh['E']], axis=1) / 3
-
-    return centroids
-
-
-def edge_properties_calculator(node_a, node_b):
-    """ Calculates the length and CCW norm out of a single edge
-
-    :param node_a: X-Y Coordinates of node A
-    :param node_b: X-Y Coordinates of node B
-    :return length: Length of the edge from A->B
-    :return norm: Normal vector out of the edge in CCW fashion: [nx, ny]
-    """
-
-    length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
-    norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
-
-    return length, norm
-
-
-def area_calculator(mesh):
-    """Calculates the area of the two triangular cells for the given indices.
-
-    :param mesh: The mesh of the problem holding all cells.
-    :return area: Area of the cells
-    """
-    # TODO: Vectorize with Numpy and have it do all cells at once
-    area = np.zeros(mesh['E'].shape[0])
-    for i in range(mesh['E'].shape[0]):
-        nodes = mesh['E'][i]
-        # https://en.wikipedia.org/wiki/Heron%27s_formula
-        # print(cellIndex)
-        a, _ = edge_properties_calculator(mesh['V'][nodes[0]], mesh['V'][nodes[1]])
-        b, _ = edge_properties_calculator(mesh['V'][nodes[1]], mesh['V'][nodes[2]])
-        c, _ = edge_properties_calculator(mesh['V'][nodes[2]], mesh['V'][nodes[0]])
-
-        s = (a + b + c) / 2
-
-        area[i] = math.sqrt(s * (s - a) * (s - b) * (s - c))
-    return area
-
-
-
-# TODO: Break the AMR into its own file
 def reorient_ccw(node1, node2, node3, node_list):
     """Re-orients the given set of nodes to be in a counter-clockwise order
 
@@ -227,7 +175,7 @@ def find_uniform_splitting(state, mesh, config):
         if mesh['Bname'][be[3]] == 'Inflow' or mesh['Bname'][be[3]] == 'Outflow':
             continue
         else:
-            be_l, be_n = edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+            be_l, be_n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
 
             # Cell i quantities
             u = state[be[2]][1] / state[be[2]][0]
@@ -245,7 +193,7 @@ def find_uniform_splitting(state, mesh, config):
     for i in range(len(mesh['IE'])):
         # Internal Edges
         ie = mesh['IE'][i]
-        ie_l, ie_n = edge_properties_calculator(mesh['V'][ie[0]], mesh['V'][ie[1]])
+        ie_l, ie_n = cgf.edge_properties_calculator(mesh['V'][ie[0]], mesh['V'][ie[1]])
 
         # Left cell/cell i quantities
         u_l = state[ie[2]]

@@ -28,7 +28,7 @@ def plot_mesh(Mesh, fname):
     plt.axis('equal')
     plt.tick_params(axis='both', labelsize=12)
     f.tight_layout()
-    plt.savefig(fname)
+    plt.savefig(fname, bbox_inches='tight')
     plt.close(f)
 
 

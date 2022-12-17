@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import compressible_flow_formulas
-import mesh_processing
+import cell_geometry_formulas as cgf
 import initialization as intlzn
 
 # Reformat, vecotirze, simplify
@@ -77,7 +77,7 @@ def initialize_moc(mesh, config):
     mach_upstream = config.M
     for i in range(len(zones)):
         # Find angle diagonal makes with horizontal
-        l, _ = mesh_processing.edge_properties_calculator(zones[i][1], zones[i][2])
+        l, _ = cgf.edge_properties_calculator(zones[i][1], zones[i][2])
         theta = math.acos((zones[i][2, 0] - zones[i][1, 0]) / l) / 2 - (config.a * math.pi / 180)
         # Run OS calculation
         os_results = compressible_flow_formulas.obliqueshock(theta, mach_upstream, 1, 1, 1, config.y)
@@ -164,7 +164,7 @@ def moc_reflect(mesh, config, moc_lines):
         for i in range(len(moc_lines)):
             intersection_point = moc_lines[i][-1, :]
             for be in wall_BEs:
-                be_l, be_n = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+                be_l, be_n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
 
                 # Find the intersection between the BE and MOC line
                 be_intersection = check_intersection2(moc_lines[i][-2, :], moc_lines[i][-1, :],
@@ -179,8 +179,8 @@ def moc_reflect(mesh, config, moc_lines):
 
                 # Check the intersection point and make sure that it is on the BE - if both lengths are less than BE
                 # length the intersection point must be between them to some degree
-                l1, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
-                l2, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
+                l1, _ = cgf.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
+                l2, _ = cgf.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
                 if l1 > be_l and l2 > be_l:
                     continue
 
@@ -210,7 +210,7 @@ def moc_reflect(mesh, config, moc_lines):
         for i in range(len(moc_lines)):
             intersection_point = moc_lines[i][-1, :]
             for be in wall_BEs:
-                be_l, be_n = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+                be_l, be_n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
 
                 # Find the intersection between the BE and MOC line
                 be_intersection = check_intersection2(moc_lines[i][-2, :], moc_lines[i][-1, :],
@@ -225,8 +225,8 @@ def moc_reflect(mesh, config, moc_lines):
 
                 # Check the intersection point and make sure that it is on the BE - if both lengths are less than BE
                 # length the intersection point must be between them to some degree
-                l1, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
-                l2, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
+                l1, _ = cgf.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
+                l2, _ = cgf.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
                 if l1 > be_l and l2 > be_l:
                     continue
 
@@ -257,7 +257,7 @@ def moc_reflect(mesh, config, moc_lines):
             intersected = False
             intersection_point = moc_lines[i][-1, :]
             for be in wall_BEs:
-                be_l, be_n = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+                be_l, be_n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
 
                 # Find the intersection between the BE and MOC line
                 be_intersection = check_intersection2(moc_lines[i][-2, :], moc_lines[i][-1, :],
@@ -272,8 +272,8 @@ def moc_reflect(mesh, config, moc_lines):
 
                 # Check the intersection point and make sure that it is on the BE - if both lengths are less than BE
                 # length the intersection point must be between them to some degree
-                l1, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
-                l2, _ = mesh_processing.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
+                l1, _ = cgf.edge_properties_calculator(mesh['V'][be[0]], be_intersection)
+                l2, _ = cgf.edge_properties_calculator(mesh['V'][be[1]], be_intersection)
                 if l1 > be_l and l2 > be_l:
                     continue
 

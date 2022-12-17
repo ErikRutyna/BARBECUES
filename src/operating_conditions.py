@@ -1,6 +1,6 @@
 from skaero.atmosphere import coesa
 
-# TODO: Convert this to JSON format
+# TODO:
 class operating_conditions:
     def __init__(self, h):
         # Program control flags
@@ -23,7 +23,7 @@ class operating_conditions:
 
         # Initial conditions
         self.M = 2    # Freestream Mach number
-        self.a = 10.0    # Vehicle AoA
+        self.a = 0.0    # Vehicle AoA
         # Altitude, temperature, pressure, and density
         self.h, self.temp, self.pres, self.rho = coesa.table(h)
 

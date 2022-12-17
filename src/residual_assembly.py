@@ -1,7 +1,7 @@
 import flux
 import numpy as np
 import helper
-import mesh_processing
+import cell_geometry_formulas as cgf
 import math
 
 def euler_2D_v2(config, mesh, state):
@@ -18,15 +18,17 @@ def euler_2D_v2(config, mesh, state):
     iteration_number = 1
     residuals_norm = []
     atpr = []
+    # TODO: Investigate dynamic CFL numbers
+    cfl = 1
 
     be_l, be_n = np.zeros((mesh['BE'].shape[0])), np.zeros((mesh['BE'].shape[0], 2))
     ie_l, ie_n = np.zeros((mesh['IE'].shape[0])), np.zeros((mesh['IE'].shape[0], 2))
 
     for i in range(mesh['BE'].shape[0]):
-        be_l[i], be_n[i] = mesh_processing.edge_properties_calculator(mesh['V'][mesh['BE'][i, 0]],
+        be_l[i], be_n[i] = cgf.edge_properties_calculator(mesh['V'][mesh['BE'][i, 0]],
                                                                       mesh['V'][mesh['BE'][i, 1]])
     for i in range(mesh['IE'].shape[0]):
-        ie_l[i], ie_n[i] = mesh_processing.edge_properties_calculator(mesh['V'][mesh['IE'][i, 0]],
+        ie_l[i], ie_n[i] = cgf.edge_properties_calculator(mesh['V'][mesh['IE'][i, 0]],
                                                                       mesh['V'][mesh['IE'][i, 1]])
 
     while not converged:
@@ -49,9 +51,6 @@ def euler_2D_v2(config, mesh, state):
         # Residual tracking
         residuals_norm.append(np.linalg.norm(residuals, ord=1))
 
-        # CFL number scales according to residuals - lower residuals -> larger CFL, minimum of 1
-        cfl = abs(math.log10(1 / residuals_norm[-1])); if cfl <= 1: cfl = 1
-
         # Calculate delta_t and timestep forward the local states
         deltat_deltaa = np.divide(2 * cfl, sum_sl)
         state -= np.transpose(np.multiply(deltat_deltaa, np.transpose(residuals)))
@@ -65,18 +64,13 @@ def euler_2D_v2(config, mesh, state):
                                                                            config)
                 # If the array is already at counter length - pop off the first value as we don't want it in the counter
                 if len(atpr) == config.sma_counter:
-                    atpr.pop(0)
+                    # If we've hit length, check to see if the last value is close to the average
+                    if (abs(atpr[-1] - np.average(atpr)) / np.average(atpr)) < config.error_percent:
+                        return
+                    else:
+                        atpr.pop(0)
                 # Append the newly calculated value for ATPR
                 atpr.append(helper.calculate_atpr(stagnation_pressure, mesh))
-
-                # Check if most recent result is less than average, if so we call simulation converged
-                if (abs(atpr[config.sma_counter - 1] - np.average(atpr)) / np.average(atpr)) < config.error_percent and\
-                        len(atpr) == config.sma_counter:
-                    return
-
-            # If we somehow go above the minimum it means the physics is not being modeled - so reset ATPR calculations
-            if residuals_norm[-1] > config.smart_convergence_minimum:
-                atpr.clear()
         else:
             if residuals_norm[iteration_number - 1] < 1e-5:
                 print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number,

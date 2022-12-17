@@ -129,14 +129,3 @@ def calculate_static_pressure_single(state, fluid):
     return pressure
 
 
-def generate_freestream_state(config):
-    """Generates a single state vector of the freestream configuration for the given flow conditions.
-
-    :param config: Class containing freestream and fluid information
-    :return: state: 4 element array that has the freestream condition
-    """
-    state = np.array([1,
-                      config.M * math.cos(config.a * math.pi / 180),
-                      config.M * math.sin(config.a * math.pi / 180),
-                      1 / ((config.y - 1) * config.y) + config.M ** 2 / 2])
-    return state

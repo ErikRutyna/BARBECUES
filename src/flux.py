@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import helper
-import mesh_processing
+import cell_geometry_formulas
 import initialization as intlzn
 
 def F_euler_2d(u, fluid):
@@ -219,65 +219,3 @@ def compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n):
 
 
 # TODO: Fix Roe Flux then copy Roe flux code here and swap Roe calls to HLLE calls
-def compute_residuals_hlle(config, mesh, state):
-    """Computes the residuals and sum of speed*edge_lengths for the state on the given mesh using the HLLE Flux method.
-
-    :param config: Operating and working fluid conditions
-    :param mesh: Computational domain in KFID GRI format
-    :param state: Nx4 array of state values
-    :return:
-    """
-    residuals = np.zeros((len(mesh['E']), 4))  # Residuals from fluxes
-    sum_sl = np.transpose(np.zeros((len(mesh['E']))))
-
-    # Internal edges
-    for ie in mesh['IE']:
-        # ie = [0: node A, 1: node B, 2: cell i, 3: cell N]
-        ie_l, ie_n = mesh_processing.edge_properties_calculator(mesh['V'][ie[0]], mesh['V'][ie[1]])
-
-        ie_flux, ie_smax = hlle_euler_2d(state[ie[2]], state[ie[3]], ie_n, config)
-
-        residuals[ie[2]] += ie_flux * ie_l  # Summing residuals to be taken out of cell i
-        residuals[ie[3]] -= ie_flux * ie_l  # Summing residuals to negative taken out of cell N (added to cell N)
-
-        sum_sl[ie[2]] += ie_smax * ie_l
-        sum_sl[ie[3]] += ie_smax * ie_l
-
-    # Boundary edges with their respective conditions
-    for be in mesh['BE']:
-        # be = [0: node A, 1: node B, 2: cell i, 3: boundary index]
-        be_l, be_n = mesh_processing.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
-        be_smax = 0  # In case there is some additional boundary condition
-
-        if mesh['Bname'][be[3]] == 'Engine':
-            # Apply inviscid wall boundary condition
-            # Boundary velocity
-            u_plus = state[be[2], 1] / state[be[2], 0]
-            v_plus = state[be[2], 2] / state[be[2], 0]
-            V_plus = np.array([u_plus, v_plus])
-            be_vel = V_plus - np.multiply(np.dot(V_plus, be_n), be_n)
-
-            # Boundary pressure
-            be_pressure = (config.y - 1) * (state[be[2], 3] - 0.5 * state[be[2], 0] * (be_vel[0] ** 2 + be_vel[1] ** 2))
-
-            # Enforcing no flow through with pressure condition
-            be_flux = [0, be_pressure * be_n[0], be_pressure * be_n[1], 0]
-            local_flux = F_euler_2d(state[be[2]], config)
-            h = (local_flux[3][0] + local_flux[3][1]) / (local_flux[0][1] + local_flux[0][0])
-            be_smax = abs(u_plus * be_n[0] + v_plus * be_n[1]) \
-                      + math.sqrt((config.y - 1) * (h - np.linalg.norm([u_plus, v_plus]) ** 2 / 2))
-
-
-        elif mesh['Bname'][be[3]] == 'Exit' or mesh['Bname'][be[3]] == 'Outflow':
-            # Apply supersonic outflow boundary conditions
-            be_flux, be_smax = hlle_euler_2d(state[be[2]], state[be[2]], be_n, config)
-
-        elif mesh['Bname'][be[3]] == 'Inflow':
-            # Apply freestream inflow boundary conditions
-            be_flux, be_smax = hlle_euler_2d(state[be[2]], helper.generate_freestream_state(config),
-                                             be_n, config)
-
-        residuals[be[2]] += np.array(be_flux) * be_l
-        sum_sl[be[2]] += be_smax * be_l
-
-    return residuals, sum_sl

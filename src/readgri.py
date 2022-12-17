@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-import mesh_processing
+import cell_geometry_formulas as cgf
 import math
 import flux
 
@@ -169,7 +169,7 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
         if Mesh['Bname'][be[3]] == 'Inflow' or Mesh['Bname'][be[3]] == 'Outflow':
             continue
         else:
-            be_l, be_n = mesh_processing.edge_properties_calculator(Mesh['V'][be[0]], Mesh['V'][be[1]])
+            be_l, be_n = cgf.edge_properties_calculator(Mesh['V'][be[0]], Mesh['V'][be[1]])
 
             # Cell i quantities
             u = U[be[2]][1] / U[be[2]][0]
@@ -187,7 +187,7 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
     for i in range(len(Mesh['IE'])):
         # Internal Edges
         ie = Mesh['IE'][i]
-        ie_l, ie_n = mesh_processing.edge_properties_calculator(Mesh['V'][ie[0]], Mesh['V'][ie[1]])
+        ie_l, ie_n = cgf.edge_properties_calculator(Mesh['V'][ie[0]], Mesh['V'][ie[1]])
 
         # Left cell/cell i quantities
         u_l = U[ie[2]]
