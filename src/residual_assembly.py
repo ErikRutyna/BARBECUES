@@ -2,13 +2,12 @@ import flux
 import numpy as np
 import helper
 import cell_geometry_formulas as cgf
-import math
+import preprocess as pp
 
-def euler_2D_v2(config, mesh, state):
+def euler_2D_v2(mesh, state):
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.
 
-    :param config: Class containing fluid and simulation configuration information
     :param mesh: 2D mesh of the domain from the readgri format
     :param state: Initialized state for all values
     :return: Modifies the state array in place and when finished running
@@ -31,6 +30,7 @@ def euler_2D_v2(config, mesh, state):
         ie_l[i], ie_n[i] = cgf.edge_properties_calculator(mesh['V'][mesh['IE'][i, 0]],
                                                                       mesh['V'][mesh['IE'][i, 1]])
 
+    # TODO: Setup array for residuals to plot residuals once simulation finishes
     while not converged:
         if iteration_number % 10 == 0:
             # Print out a small tracking statement every 10 iterations to watch the program
@@ -41,13 +41,13 @@ def euler_2D_v2(config, mesh, state):
         sum_sl = np.transpose(np.zeros((len(mesh['E']))))  # s*l vector for computing time steps
 
         # If-elif-else tree for flux method selection
-        if config.flux_method == 'roe':
-            residuals, sum_sl = flux.compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n)
-        elif config.flux_method == 'hlle':
-            residuals, sum_sl = flux.compute_residuals_hlle(config, mesh, state)
+        if pp.sim_con['flux_method'] == 'roe':
+            residuals, sum_sl = flux.compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n)
+        elif pp.sim_con['flux_method'] == 'hlle':
+            residuals, sum_sl = flux.compute_residuals_hlle(mesh, state, be_l, be_n, ie_l, ie_n)
         # If it cannot find the right flux method, it will default to the Roe Flux
         else:
-            residuals, sum_sl = flux.compute_residuals_roe(config, mesh, state, be_l, be_n, ie_l, ie_n)
+            residuals, sum_sl = flux.compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n)
         # Residual tracking
         residuals_norm.append(np.linalg.norm(residuals, ord=1))
 
@@ -56,27 +56,26 @@ def euler_2D_v2(config, mesh, state):
         state -= np.transpose(np.multiply(deltat_deltaa, np.transpose(residuals)))
 
         # Apply the right convergence method depending on the configuration
-        if config.smart_convergence:
+        if pp.conv_con['convergence_method'] == 'smart':
             # Require some minimum degree of convergence to ensure proper physics
-            if residuals_norm[-1] < config.smart_convergence_minimum:
+            if residuals_norm[-1] < pp.conv_con['smart_convergence_minimum']:
                 # Calculate ATPR and add to back of array
-                stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state, config),
-                                                                           config)
+                stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state))
                 # If the array is already at counter length - pop off the first value as we don't want it in the counter
-                if len(atpr) == config.sma_counter:
+                if len(atpr) == pp.conv_con['smart_convergence_length']:
                     # If we've hit length, check to see if the last value is close to the average
-                    if (abs(atpr[-1] - np.average(atpr)) / np.average(atpr)) < config.error_percent:
-                        return
+                    if (abs(atpr[-1] - np.average(atpr)) / np.average(atpr)) < pp.conv_con['smart_convergence_error_tol']:
+                        return 0
                     else:
                         atpr.pop(0)
                 # Append the newly calculated value for ATPR
                 atpr.append(helper.calculate_atpr(stagnation_pressure, mesh))
         else:
-            if residuals_norm[iteration_number - 1] < 1e-5:
+            if residuals_norm[iteration_number - 1] < pp.conv_con['convergence minimum']:
                 print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number,
                                                                       residuals_norm[iteration_number - 2]))
-                return
+                return 0
 
 
         iteration_number += 1
-    return
+    return 0

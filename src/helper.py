@@ -1,6 +1,6 @@
+import preprocess as pp
 import numpy as np
 import math
-
 
 def calculate_atpr(stag_pressure, mesh):
     """Calculates the average total pressure recovered (ATPR) along the exit plane of the isolator.
@@ -32,51 +32,48 @@ def calculate_atpr(stag_pressure, mesh):
     return atpr
 
 
-def calculate_stagnation_pressure(state, mach, fluid):
+def calculate_stagnation_pressure(state, mach):
     """Calculates the stagnation pressure for each state vector
 
     :param state: Nx4 array of state variables - one per cell [rho, rho*u, rho*v, rho*E]
-    :param fluid: Class for the current working fluid for the gamma value
     :param mach: Nx1 array of the local Mach number in each cell
     :return: Nx1 array of stagnation pressures - one per cell
     """
     # Constants to be used in the stagnation pressure formula
-    c_1 = (fluid.y - 1) / 2
-    c_2 = fluid.y / (fluid.y - 1)
+    c_1 = (pp.fluid_con['y'] - 1) / 2
+    c_2 = pp.fluid_con['y'] / (pp.fluid_con['y'] - 1)
 
     # Local static pressure per state vector
-    pressure = calculate_static_pressure(state, fluid)
+    pressure = calculate_static_pressure(state)
     # Stagnation pressure
     stagnation_pressure = np.multiply(np.power(1 + c_1 * np.power(mach, 2), c_2), pressure)
 
     return stagnation_pressure
 
 
-def calculate_mach(state, fluid):
+def calculate_mach(state):
     """Calculates the Mach number for each unique state vector.
 
     :param state: Local state vector in a given cell
-    :param fluid: Working fluid
     :return: Returns mach number
     """
     # Velocity magnitude
     q = np.sqrt(np.power(np.divide(state[:, 1], state[:, 0]), 2) + np.power(np.divide(state[:, 2], state[:, 0]), 2))
 
     # Use speed of sound, c = sqrt(y*p/rho)
-    p = calculate_static_pressure(state, fluid)
-    c = math.sqrt(fluid.y) * np.sqrt(np.divide(p, state[:, 0]))
+    p = calculate_static_pressure(state)
+    c = math.sqrt(pp.fluid_con['y']) * np.sqrt(np.divide(p, state[:, 0]))
 
     mach = np.divide(q, c)
 
     return mach
 
 
-def calculate_mach_single(state, fluid):
+def calculate_mach_single(state):
     """Calculates Mach number for a single state vector slice - only exists because I was too lazy to fix the original
     mach_calc function to account for single slices and whole mesh arrays.
 
     :param state: Local state vector in a given cell
-    :param fluid: Working fluid
     :return: Returns mach number
     """
     # Velocity
@@ -85,25 +82,24 @@ def calculate_mach_single(state, fluid):
     q = np.linalg.norm([u, v])
 
     # Enthalpy
-    h = (state[3] + calculate_static_pressure(state, fluid)) / state[0]
+    h = (state[3] + calculate_static_pressure(state)) / state[0]
 
     # Speed of sound
-    c = math.sqrt((fluid.y - 1) * (h - q ** 2 / 2))
+    c = math.sqrt((pp.fluid_con['y'] - 1) * (h - q ** 2 / 2))
 
     mach = q / c
 
     return mach
 
 
-def calculate_static_pressure(state, fluid):
+def calculate_static_pressure(state):
     """Calculates local static pressure from the given state.
 
     :param state: Nx4 array of Euler state variables
-    :param fluid: Class of working fluid
     :return: pressure: local static pressure for each state vector
     """
     # Leading constant term
-    c = (fluid.y - 1)
+    c = (pp.fluid_con['y'] - 1)
     # Velocity term
     q = np.power(np.divide(state[:, 1], state[:, 0]), 2) + np.power(np.divide(state[:, 2], state[:, 0]), 2)
     # p = (y - 1) * (rho*E - 0.5 * rho * q^2)
@@ -112,15 +108,14 @@ def calculate_static_pressure(state, fluid):
     return pressure
 
 
-def calculate_static_pressure_single(state, fluid):
+def calculate_static_pressure_single(state):
     """Calculates local static pressure from the given state.
 
     :param state: Nx4 array of Euler state variables
-    :param fluid: Class of working fluid
     :return: pressure: local static pressure for each state vector
     """
     # Leading constant term
-    c = (fluid.y - 1)
+    c = (pp.fluid_con['y'] - 1)
     # Velocity term
     q = np.power(np.divide(state[1], state[0]), 2) + np.power(np.divide(state[2], state[0]), 2)
     # p = (y - 1) * (rho*E - 0.5 * rho * q^2)

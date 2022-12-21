@@ -35,7 +35,6 @@ def area_calculator(mesh):
     :param mesh: The mesh of the problem holding all cells.
     :return area: Area of the cells
     """
-    # TODO: Vectorize with Numpy and have it do all cells at once
     area = np.zeros(mesh['E'].shape[0])
     for i in range(mesh['E'].shape[0]):
         nodes = mesh['E'][i]

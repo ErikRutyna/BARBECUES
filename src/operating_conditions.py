@@ -1,6 +1,5 @@
 from skaero.atmosphere import coesa
 
-# TODO:
 class operating_conditions:
     def __init__(self, h):
         # Program control flags

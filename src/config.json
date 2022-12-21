@@ -7,7 +7,7 @@
           "adaptive_cycles": 0,
           "adaptation_percentage": 0.05,
 
-          "flux_method": "roe"
+          "flux_method": "hlle"
        }
     ],
 
@@ -21,7 +21,7 @@
             
             "smart_convergence_length": 42,
             "smart_convergence_error_tol": 0.025,
-            "smart_convergence_ascs": ["cl", "cd", "atpr", "cmx"]            
+            "smart_convergence_ascs": ["atpr"]
         }
     ],
 
@@ -33,6 +33,7 @@
 
     "data_processing": [
         {
+            "filename": "inlet",
             "plot_mesh": true,
             "plot_mach": true,
             "plot_stag_press": true,
@@ -45,15 +46,14 @@
           "name": "CPG_Air",
           "cp": 1005.0,
           "cv": 718.0,
-          "MW": 0.0289647,
-          "R": 287.0
+          "MW": 0.0289647
        }
     ],
     
     "flight": [
        {
           "freestream_mach_numer": 2,
-          "angle_of_attack": 0.0,
+          "angle_of_attack": 10.0,
           "altitude": 30000.0
        }
     ]

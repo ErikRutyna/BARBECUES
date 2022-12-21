@@ -1,3 +1,4 @@
+import preprocess as pp
 import matplotlib.pyplot as plt
 import numpy as np
 import helper
@@ -32,19 +33,18 @@ def plot_mesh(Mesh, fname):
     plt.close(f)
 
 
-def plot_mach(Mesh, state, fluid, fname):
+def plot_mach(Mesh, state, fname):
     """Contour/tricolor plot of the Mach number at each cell in the mesh.
 
     :param Mesh: Mesh dictionary
     :param state: Nx4 state vectory array
-    :param fluid: working fluid information to get ratio of specific heats
     :param fname: filename for what the figure is saved under
     """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     figure = plt.figure(figsize=(12, 12))
 
     # Calculate Mach numbers to plot
-    mach = helper.calculate_mach(state, fluid)
+    mach = helper.calculate_mach(state)
 
     # Mach number contour plotting
     plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=mach, shading='flat', cmap='jet')
@@ -67,20 +67,19 @@ def plot_mach(Mesh, state, fluid, fname):
     plt.close(figure)
 
 
-def plot_stagnation_pressure(Mesh, state, fluid, fname):
+def plot_stagnation_pressure(Mesh, state, fname):
     """Contour/tricolor plot of the stagnation pressure at each cell in the mesh.
 
     :param Mesh: Mesh dictionary
     :param state: Nx4 state vectory array
-    :param fluid: working fluid information to get ratio of specific heats
     :param fname: filename for what the figure is saved under
     """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     figure = plt.figure(figsize=(12, 12))
 
     # Calculating the stagnation pressure
-    mach = helper.calculate_mach(state, fluid)
-    stagnation_pressure = helper.calculate_stagnation_pressure(state, mach, fluid)
+    mach = helper.calculate_mach(state)
+    stagnation_pressure = helper.calculate_stagnation_pressure(state, mach)
     normalized_stagnation_pressure = np.divide(stagnation_pressure, max(stagnation_pressure))
     ATPR = helper.calculate_atpr(normalized_stagnation_pressure, Mesh)
 
@@ -174,3 +173,17 @@ def plot_moc(Mesh, moc, fname):
     f.tight_layout()
     plt.savefig(fname)
     plt.close(f)
+
+
+def plot_config(mesh, state, fname, i):
+    """Plotting driver that makes all the plots according to the data configuration config.
+
+    :param mesh: Mesh dictionary
+    :param state: Nx4 state vectory array
+    :param fname: filename for what the figure is saved under
+    :param i: Adaptive cycle number, is 0 for no adaptations
+    """
+    if pp.data_con['plot_mesh']: plot_mesh(mesh, fname + str(i) + '.png')
+    if pp.data_con['plot_mach']: plot_mach(mesh, state, fname + '_M_' + str(i) + '.png')
+    if pp.data_con['plot_stag_press']: plot_stagnation_pressure(mesh, state, fname + '_p0_' + str(i) + '.png')
+    if pp.data_con['plot_residuals']: pass
