@@ -1,13 +1,13 @@
 {    
     "simulation": [
        {
-        "mesh_path": "../Meshes/mesh0.gri",   
+        "mesh_path": "../Meshes/mesh0.gri",
         "restart_files": false,
 
-          "adaptive_cycles": 0,
+          "adaptive_cycles": 1,
           "adaptation_percentage": 0.05,
 
-          "flux_method": "hlle"
+          "flux_method": "roe"
        }
     ],
 
@@ -21,7 +21,7 @@
             
             "smart_convergence_length": 42,
             "smart_convergence_error_tol": 0.025,
-            "smart_convergence_ascs": ["atpr"]
+            "smart_convergence_ascs": ["cd", "cl", "atpr"]
         }
     ],
 
@@ -37,7 +37,8 @@
             "plot_mesh": true,
             "plot_mach": true,
             "plot_stag_press": true,
-            "plot_residuals": true
+            "plot_residuals": true,
+            "plot_performance": true
         }
     ],
 
@@ -46,7 +47,10 @@
           "name": "CPG_Air",
           "cp": 1005.0,
           "cv": 718.0,
-          "MW": 0.0289647
+          "MW": 0.0289647,
+          "viscosity_ref": 1.716e-5,
+          "viscosity_ref_temp": 273,
+          "viscosity_ref_S": 111
        }
     ],
     

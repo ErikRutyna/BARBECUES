@@ -4,6 +4,7 @@ import helper
 import cell_geometry_formulas as cgf
 import preprocess as pp
 
+
 def euler_2D_v2(mesh, state):
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.
@@ -15,8 +16,11 @@ def euler_2D_v2(mesh, state):
     # Convergence and iteration information
     converged = False
     iteration_number = 1
-    residuals_norm = []
-    atpr = []
+    # All residual coefficient tracking for standard convergence/plotting purposes
+    residual_norms = np.empty((0, 5))
+    coefficients = np.empty((0, 4))
+    # Asymptotic Convergence Criteria for Smart Convergence
+    ascs = np.empty((0, 4))
     # TODO: Investigate dynamic CFL numbers
     cfl = 1
 
@@ -30,12 +34,11 @@ def euler_2D_v2(mesh, state):
         ie_l[i], ie_n[i] = cgf.edge_properties_calculator(mesh['V'][mesh['IE'][i, 0]],
                                                                       mesh['V'][mesh['IE'][i, 1]])
 
-    # TODO: Setup array for residuals to plot residuals once simulation finishes
     while not converged:
         if iteration_number % 10 == 0:
             # Print out a small tracking statement every 10 iterations to watch the program
-            print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number,
-                                                                  residuals_norm[iteration_number - 2]))
+            print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number, residual_norms[-1, 4]))
+
         # Reset the residual and timestep arrays
         residuals = np.zeros((len(mesh['E']), 4))  # Residuals from fluxes
         sum_sl = np.transpose(np.zeros((len(mesh['E']))))  # s*l vector for computing time steps
@@ -48,8 +51,17 @@ def euler_2D_v2(mesh, state):
         # If it cannot find the right flux method, it will default to the Roe Flux
         else:
             residuals, sum_sl = flux.compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n)
-        # Residual tracking
-        residuals_norm.append(np.linalg.norm(residuals, ord=1))
+
+        # Residual tracking - L1 norms of [continuity, x-moment, y-momentum, energy, all]
+        residual_norms = np.vstack((residual_norms,
+                                    (np.linalg.norm(residuals[:, 0], ord=1), np.linalg.norm(residuals[:, 1], ord=1),
+                                     np.linalg.norm(residuals[:, 2], ord=1), np.linalg.norm(residuals[:, 3], ord=1),
+                                     np.linalg.norm(residuals, ord=1))))
+        # Coefficient tracking - exported for plotting purposes
+        stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state))
+        atpr = helper.calculate_atpr(stagnation_pressure, mesh)
+        cd, cl, cmx = helper.calculate_forces_moments(mesh, state)
+        coefficients = np.vstack((coefficients, (cd, cl, cmx, atpr)))
 
         # Calculate delta_t and timestep forward the local states
         deltat_deltaa = np.divide(2 * cfl, sum_sl)
@@ -58,24 +70,38 @@ def euler_2D_v2(mesh, state):
         # Apply the right convergence method depending on the configuration
         if pp.conv_con['convergence_method'] == 'smart':
             # Require some minimum degree of convergence to ensure proper physics
-            if residuals_norm[-1] < pp.conv_con['smart_convergence_minimum']:
-                # Calculate ATPR and add to back of array
-                stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state))
+            if residual_norms[-1, 4] < pp.conv_con['smart_convergence_minimum']:
+                # Check the ASC quantities and add to back of array that tracks them
+                converge_check = []
+
                 # If the array is already at counter length - pop off the first value as we don't want it in the counter
-                if len(atpr) == pp.conv_con['smart_convergence_length']:
-                    # If we've hit length, check to see if the last value is close to the average
-                    if (abs(atpr[-1] - np.average(atpr)) / np.average(atpr)) < pp.conv_con['smart_convergence_error_tol']:
-                        return 0
+                if ascs.shape[0] == pp.conv_con['smart_convergence_length']:
+                    # If we've hit length, check to see if the last value is close to the average for the desired ASCs
+                    for asc in pp.conv_con['smart_convergence_ascs']:
+                        if asc == 'cd':
+                            if abs(ascs[-1, 0] - np.mean(ascs[:, 0])) / np.mean(ascs[:, 0]) < pp.conv_con['smart_convergence_error_tol']:
+                                converge_check.append(True)
+                        if asc == 'cl':
+                            if abs(ascs[-1, 1] - np.mean(ascs[:, 1])) / np.mean(ascs[:, 1]) < pp.conv_con['smart_convergence_error_tol']:
+                                converge_check.append(True)
+                        if asc == 'cmx':
+                            if abs(ascs[-1, 2] - np.mean(ascs[:, 2])) / np.mean(ascs[:, 2]) < pp.conv_con['smart_convergence_error_tol']:
+                                converge_check.append(True)
+                        if asc == 'atpr':
+                            if abs(ascs[-1, 3] - np.mean(ascs[:, 3])) / np.mean(ascs[:, 3]) < pp.conv_con['smart_convergence_error_tol']:
+                                converge_check.append(True)
+                    # If all checks pass, then its converged
+                    if np.all(np.array(converge_check)):
+                        print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number, residual_norms[-1, 4]))
+                        return residual_norms, coefficients
                     else:
-                        atpr.pop(0)
-                # Append the newly calculated value for ATPR
-                atpr.append(helper.calculate_atpr(stagnation_pressure, mesh))
+                        # Remove the first entry
+                        np.delete(ascs, 0, axis=1)
+                # Append the newly calculated values for the ASCs
+                ascs = np.vstack((ascs, (cd, cl, cmx, atpr)))
         else:
-            if residuals_norm[iteration_number - 1] < pp.conv_con['convergence minimum']:
-                print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number,
-                                                                      residuals_norm[iteration_number - 2]))
-                return 0
-
-
+            if residual_norms[-1, 4] < pp.conv_con['convergence minimum']:
+                print('Iteration: {0}\t L1 Residual Norm: {1}'.format(iteration_number, residual_norms[-1, 4]))
+                return residual_norms, coefficients
         iteration_number += 1
-    return 0
+    return residual_norms, coefficients

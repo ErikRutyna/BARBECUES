@@ -1,6 +1,9 @@
 import preprocess as pp
+import initialization as initzn
 import numpy as np
 import math
+import cell_geometry_formulas as cgf
+import compressible_flow_formulas as cff
 
 def calculate_atpr(stag_pressure, mesh):
     """Calculates the average total pressure recovered (ATPR) along the exit plane of the isolator.
@@ -124,3 +127,80 @@ def calculate_static_pressure_single(state):
     return pressure
 
 
+def calculate_pressure_coefficient(state):
+    """Calculate the pressure coefficient according to the formula C_p = (P - P_infty) / (P0 - P_infty)
+
+    :param state: Nx4 state vector set
+    :return: cp - array of pressure coefficients
+    """
+    # Static pressures
+    p = calculate_static_pressure(state)
+    # Stagnation pressures
+    p0 = calculate_stagnation_pressure(state, calculate_mach(state))
+    # Freestream static pressure from freestream state
+    pinf = calculate_static_pressure_single(initzn.generate_freestream_state())
+
+    cp = np.divide(p - pinf, p0 - pinf)
+
+    return cp
+
+
+def calculate_forces_moments(mesh, state):
+    """Calculate the drag coefficients, lift coefficient, and the pitching moment about the origin of the domain (0,0).
+
+    :param mesh: Mesh in the loaded *.gri format
+    :param state: Nx4 state vector set
+    :return: cd, cl, cmx (force and moment coefficients)
+    """
+    cp = calculate_pressure_coefficient(state)
+
+    cd = 0
+    cl = 0
+    cmx = 0
+
+    # Projected x-length of the object in the flow
+    l_tot = abs((mesh['V'][mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]][:, 0:2]][:, 0]).max() - \
+                (mesh['V'][mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]][:, 0:2]][:, 0]).min())
+
+    wall_bes = mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]]
+
+    for be in wall_bes:
+        l, n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+        # Pressure integrals for lift and drag
+        cl += 1 / l_tot * cp[be[2]] * -n[1] * l * math.cos(pp.flight_con['angle_of_attack'])
+        cd += 1 / l_tot * cp[be[2]] * n[0] * l
+
+        # Moment = F x d, d is defined as distance from origin to midpoint of edge
+        midpoint = (mesh['V'][be[0]] + mesh['V'][be[1]]) / 2
+        cmx += (cp[be[2]] * n[0] * l * midpoint[0] - cp[be[2]] * n[1] * l * midpoint[1]) / l_tot ** 2
+
+    return cd, cl, cmx
+
+def calculate_plate_friction(mesh, state):
+    """Calculate the skin drag coefficient for a flat plate (boundary section) according to the NASA paper.
+
+    :param mesh: Mesh in the loaded *.gri format
+    :param state: Nx4 state vector set
+    :return: cf_approx
+    """
+    cf_approx = 0
+
+    wall_bes = mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]]
+
+    # Additional freestream quantities for calculating a viscous drag coefficient
+    mu_inf = cff.sutherland_viscosity(pp.flight_con['tinf'])
+    Re_x = pp.flight_con['pinf'] / (pp.flight_con['tinf'] * pp.fluid_con['R']) * \
+           pp.flight_con['freestream_mach_numer'] * math.sqrt(pp.flight_con['tinf'] * pp.fluid_con['R'] * pp.fluid_con['y']) / mu_inf
+
+    for be in wall_bes:
+        l, _ = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
+        # T = E / Cv
+        t_local = state[be[2], 3] / state[be[2], 0] / pp.fluid_con['cv']
+        mu_local = cff.sutherland_viscosity(t_local)
+        cw = mu_local * pp.flight_con['tinf'] / (mu_inf * t_local)
+
+        # From the NASA paper in the citations
+        cf_local = 0.664 / (math.sqrt(Re_x * l / cw))
+        cf_approx += cf_local
+
+    return cf_approx

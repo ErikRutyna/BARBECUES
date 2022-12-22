@@ -1,5 +1,5 @@
 import numpy as np
-import plotmesh
+import plotting
 import mesh_generation_helper as mgh
 import matplotlib.pyplot as plt
 import scipy.spatial as sp

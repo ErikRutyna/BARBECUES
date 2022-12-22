@@ -175,15 +175,61 @@ def plot_moc(Mesh, moc, fname):
     plt.close(f)
 
 
-def plot_config(mesh, state, fname, i):
+def plot_residuals(residuals):
+    """Plots all the residuals for the simulation.
+
+    :param residuals: Nx4 residual array
+    """
+    f = plt.figure(figsize=(12, 12))
+
+    plt.plot(np.array(range(residuals.shape[0])) + 1, residuals[:, 0], color='blue',    label='Continuity')
+    plt.plot(np.array(range(residuals.shape[0])) + 1, residuals[:, 1], color='green',   label='X-Momentum')
+    plt.plot(np.array(range(residuals.shape[0])) + 1, residuals[:, 2], color='purple',  label='Y-Momentum')
+    plt.plot(np.array(range(residuals.shape[0])) + 1, residuals[:, 3], color='red',     label='Energy', marker="o")
+    plt.plot(np.array(range(residuals.shape[0])) + 1, residuals[:, 4], color='black',   label='L1 - Norm', marker=".")
+
+    plt.legend()
+    plt.yscale('log')
+
+    plt.tick_params(axis='both', labelsize=12)
+    plt.savefig('residuals.png')
+    plt.close(f)
+
+
+def plot_performance(coefficients):
+    """Plots the performance coefficients of the simulation as a function of iteration number.
+
+    :param coefficients: Nx4 array of coefficients [cd, cl, cmx, atpr]
+    """
+    f, axs = plt.subplots(2, 2, figsize=(12, 12))
+
+    axs[0, 0].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 0], 'tab:blue')
+    axs[0, 0].set_title('Drag Coefficient ($C_D$)')
+
+    axs[0, 1].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 1], 'tab:green')
+    axs[0, 1].set_title('Lift Coefficient ($C_L$)')
+
+    axs[1, 0].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 2], 'tab:purple')
+    axs[1, 0].set_title('Pitching Moment Coefficient ($C_{mx}$)')
+
+    axs[1, 1].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 3], 'tab:red')
+    axs[1, 1].set_title('Average Total Pressure Recovery Factor ($ATPR$)')
+
+    f.tight_layout()
+    f.savefig('coefficients.png')
+
+
+def plot_config(mesh, state, residuals, coefficients, fname, i):
     """Plotting driver that makes all the plots according to the data configuration config.
 
     :param mesh: Mesh dictionary
-    :param state: Nx4 state vectory array
+    :param state: Nx4 state vector array
+    :param residuals: Nx5 array of residuals [mass, x-momentum, y-momentum, energy, L1-Total]
     :param fname: filename for what the figure is saved under
     :param i: Adaptive cycle number, is 0 for no adaptations
     """
     if pp.data_con['plot_mesh']: plot_mesh(mesh, fname + str(i) + '.png')
     if pp.data_con['plot_mach']: plot_mach(mesh, state, fname + '_M_' + str(i) + '.png')
     if pp.data_con['plot_stag_press']: plot_stagnation_pressure(mesh, state, fname + '_p0_' + str(i) + '.png')
-    if pp.data_con['plot_residuals']: pass
+    if pp.data_con['plot_residuals'] and residuals.shape[0] != 0: plot_residuals(residuals)
+    if pp.data_con['plot_performance'] and coefficients.shape[0] != 0: plot_performance(coefficients)

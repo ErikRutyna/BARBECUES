@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import preprocess as pp
 
 
 def f(beta, theta, M1, gamma):
@@ -41,6 +42,7 @@ def fp(beta, theta, M1, gamma):
     fout = hp * u / v + h * (v * up - vp * u) / v ** 2
 
     return fout
+
 
 def solvebeta(theta, M1, gamma):
     """Solves for the flow turning angle of the theta-beta-Mach formula.
@@ -123,6 +125,7 @@ def p0(p, M, gamma):
     ratio = (1 + (gamma - 1) / 2.0 * M ** 2.0) ** (gamma / (gamma - 1))
     return ratio*p
 
+
 def T0(T, M, gamma):
     """Stagnation temperature calculator, use a value of T=1 to return stagnation temperature ratio
     (T0/T - stagnation/static)
@@ -134,6 +137,7 @@ def T0(T, M, gamma):
     """
     ratio = (1 + (gamma-1)/2.0*M**2.0)
     return ratio*T
+
 
 def r0(r, M, gamma):
     """Stagnation density calculator, use a value of r=1 to return stagnation density ratio (r0/r - stagnation/static)
@@ -320,3 +324,15 @@ def PMexpansion(theta, M1, T1, p1, gamma):
 
     result = {'M2': M2, 'T2': T2, 'p2': p2}
     return result
+
+
+def sutherland_viscosity(t):
+    """Calculates the viscosity using Sutherland's model for a given temperature.
+
+    :param t: Temperature to evaluate viscoity at
+    :return: mu - kinematic viscosity at temperature t
+    """
+    mu = pp.fluid_con['viscosity_ref'] * (t / pp.fluid_con['viscosity_ref_temp']) ** 1.5 *\
+         (pp.fluid_con['viscosity_ref_temp'] + pp.fluid_con['viscosity_ref_S']) / (t + pp.fluid_con['viscosity_ref_S'])
+
+    return mu
