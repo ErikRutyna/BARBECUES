@@ -3,7 +3,7 @@ import numpy as np
 import math
 import readgri
 import flux
-
+import preprocess as pp
 
 def reorient_ccw(node1, node2, node3, node_list):
     """Re-orients the given set of nodes to be in a counter-clockwise order
@@ -26,17 +26,16 @@ def reorient_ccw(node1, node2, node3, node_list):
         return np.array([node3, node2, node1])
 
 # TODO: Remake another form with standard flagged-edge splitting 1 half, 2 largest angle, 3 uniform
-def refine_interp_uniform(mesh, state, fname, config):
+def refine_interp_uniform(mesh, state, fname):
     """Performs adaptive mesh refinement on the given mesh from the results of the state vector and large jumps in Mach
     number across cell boundaries. Divides flagged cells uniformly, cells w/ >= 2 neighbors flagged uniformly, and cells
     with only 1 edge flagged.
 
-    :param mesh:
-    :param state:
-    :param config:
+    :param mesh: Mesh of the domain
+    :param state: Nx4 state vector
     :return:
     """
-    flag_cell, split_cell, flag_be, flag_ie, split_be, split_ie = find_uniform_splitting(state, mesh, config)
+    flag_cell, split_cell, flag_be, flag_ie, split_be, split_ie = find_uniform_splitting(state, mesh)
 
     new_element_ordering = np.empty((1, 3), dtype=int)
     new_formed_elements = np.empty((1, 3), dtype=int)
@@ -153,15 +152,15 @@ def refine_interp_uniform(mesh, state, fname, config):
 
     return mesh, state
 
+
 # TODO: Vectorize out loops if possible using logical indexing - speed up computation time
-def find_uniform_splitting(state, mesh, config):
+def find_uniform_splitting(state, mesh):
     """Creates a unique array of cell indices that are to be split uniformly and split to maintain conformity. Any cell
     that has 2 uniform neighbors becomes a uniform cell, this process continues until either all cells are uniform or
     a cell no longer has 2 uniform neighbors and can be split in two.
 
     :param state: Nx4 numpy array of state vectors
     :param mesh: Current working mesh
-    :param config: Simulation runtime config
     :return: array of flagged cell indices, array of split cell indices, array of flagged be, array of flagged ie
     """
     # Nx2 array [error, cell i]
@@ -181,9 +180,9 @@ def find_uniform_splitting(state, mesh, config):
             u = state[be[2]][1] / state[be[2]][0]
             v = state[be[2]][2] / state[be[2]][0]
             q = np.dot(be_n, np.array([u, v]))
-            flux_c = flux.F_euler_2d(state[be[2]], config)
+            flux_c = flux.F_euler_2d(state[be[2]])
             h_l = (flux_c[3, 0] + flux_c[3, 1]) / ( flux_c[0, 0] + flux_c[0, 1])
-            c = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
+            c = math.sqrt((pp.fluid_con['y'] - 1) * (h_l - q ** 2 / 2))
 
             error = abs(q / c) * be_l
 
@@ -200,9 +199,9 @@ def find_uniform_splitting(state, mesh, config):
         u_l_u = u_l[1] / u_l[0]
         u_l_v = u_l[2] / u_l[0]
         q_l = np.linalg.norm([u_l_u, u_l_v])
-        flux_l = flux.F_euler_2d(u_l, config)
+        flux_l = flux.F_euler_2d(u_l)
         h_l = (flux_l[3, 0] + flux_l[3, 1]) / ( flux_l[0, 0] + flux_l[0, 1])
-        c_l = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
+        c_l = math.sqrt((pp.fluid_con['y'] - 1) * (h_l - q ** 2 / 2))
         m_l = q_l / c_l
 
         # Right cell/cell N quantities
@@ -210,9 +209,9 @@ def find_uniform_splitting(state, mesh, config):
         u_r_u = u_r[1] / u_r[0]
         u_r_v = u_r[2] / u_r[0]
         q_r = np.linalg.norm([u_r_u, u_r_v])
-        flux_r = flux.F_euler_2d(u_r, config)
+        flux_r = flux.F_euler_2d(u_r)
         h_r = (flux_r[3, 0] + flux_r[3, 1]) / ( flux_r[0, 0] + flux_r[0, 1])
-        c_r = math.sqrt((config.y - 1) * (h_r - q ** 2 / 2))
+        c_r = math.sqrt((pp.fluid_con['y'] - 1) * (h_r - q ** 2 / 2))
 
         m_r = q_r / c_r
 
@@ -224,7 +223,7 @@ def find_uniform_splitting(state, mesh, config):
     # Total list of all locations where Mach number jumps are too high
     total_error_index = np.vstack((error_index_be, error_index_ie))
     error_index = np.flip(total_error_index[total_error_index[:, 0].argsort()], axis=0)
-    error_index = error_index[0:math.floor(config.adaptation_percentage * len(error_index[:, 0])), 1]
+    error_index = error_index[0:math.floor(pp.sim_con['adaptation_percentage'] * len(error_index[:, 0])), 1]
 
     # List of all unique cell locations where we want to refine and divide the triangle
     flagged_cells = []
