@@ -4,6 +4,7 @@ import numpy as np
 import math
 import cell_geometry_formulas as cgf
 import compressible_flow_formulas as cff
+from numba import njit
 
 def calculate_atpr(stag_pressure, mesh):
     """Calculates the average total pressure recovered (ATPR) along the exit plane of the isolator.
@@ -111,14 +112,15 @@ def calculate_static_pressure(state):
     return pressure
 
 
-def calculate_static_pressure_single(state):
+def calculate_static_pressure_single(state, y):
     """Calculates local static pressure from the given state.
 
     :param state: Nx4 array of Euler state variables
+    :param y: Ratio of specific heats - gamma
     :return: pressure: local static pressure for each state vector
     """
     # Leading constant term
-    c = (pp.fluid_con['y'] - 1)
+    c = (y - 1)
     # Velocity term
     q = np.power(np.divide(state[1], state[0]), 2) + np.power(np.divide(state[2], state[0]), 2)
     # p = (y - 1) * (rho*E - 0.5 * rho * q^2)
@@ -127,10 +129,11 @@ def calculate_static_pressure_single(state):
     return pressure
 
 
-def calculate_pressure_coefficient(state):
+def calculate_pressure_coefficient(state, y):
     """Calculate the pressure coefficient according to the formula C_p = (P - P_infty) / (P0 - P_infty)
 
     :param state: Nx4 state vector set
+    :param y: Ratio of specific heats - gamma
     :return: cp - array of pressure coefficients
     """
     # Static pressures
@@ -138,7 +141,7 @@ def calculate_pressure_coefficient(state):
     # Stagnation pressures
     p0 = calculate_stagnation_pressure(state, calculate_mach(state))
     # Freestream static pressure from freestream state
-    pinf = calculate_static_pressure_single(initzn.generate_freestream_state())
+    pinf = calculate_static_pressure_single(initzn.generate_freestream_state(), y)
 
     cp = np.divide(p - pinf, p0 - pinf)
 
@@ -152,7 +155,7 @@ def calculate_forces_moments(mesh, state):
     :param state: Nx4 state vector set
     :return: cd, cl, cmx (force and moment coefficients)
     """
-    cp = calculate_pressure_coefficient(state)
+    cp = calculate_pressure_coefficient(state, pp.fluid_con['y'])
 
     cd = 0
     cl = 0

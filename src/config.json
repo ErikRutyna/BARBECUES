@@ -4,7 +4,7 @@
         "mesh_path": "../Meshes/mesh0.gri",
         "restart_files": false,
 
-          "adaptive_cycles": 1,
+          "adaptive_cycles": 0,
           "adaptation_percentage": 0.05,
 
           "flux_method": "roe"
@@ -17,8 +17,7 @@
 
             "convergence minimum": 1e-5,
             "smart_convergence_minimum": 1e-2,
-            
-            
+
             "smart_convergence_length": 42,
             "smart_convergence_error_tol": 0.025,
             "smart_convergence_ascs": ["cd", "cl", "atpr"]

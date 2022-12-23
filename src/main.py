@@ -10,6 +10,7 @@ import initialization as intlzn
 import preprocess as pp
 
 
+# TODO: Remove the global parameters for things like M, AoA, gamma, etc and pass them back in as parameters for NUMBA
 def main():
     residuals = np.empty((0, 5))
     coefficients = np.empty((0, 4))

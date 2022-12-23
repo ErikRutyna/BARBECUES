@@ -2,7 +2,7 @@ import preprocess as pp
 import matplotlib.pyplot as plt
 import numpy as np
 import helper
-
+from matplotlib import ticker
 
 def plot_mesh(Mesh, fname):
     """Plots the mesh and the different boundary conditions in their respective colors.
@@ -57,7 +57,11 @@ def plot_mach(Mesh, state, fname):
     for PCM in ax.get_children():
         if isinstance(PCM, plt.cm.ScalarMappable):
             break
-    plt.colorbar(PCM, ax=ax)
+    cb = plt.colorbar(PCM, ax=ax)
+    tick_locator = ticker.MaxNLocator(nbins=5)
+    cb.locator = tick_locator
+    cb.update_ticks()
+    plt.show()
 
     # Save and close configurations
     plt.axis('equal')
@@ -93,7 +97,11 @@ def plot_stagnation_pressure(Mesh, state, fname):
     for PCM in ax.get_children():
         if isinstance(PCM, plt.cm.ScalarMappable):
             break
-    plt.colorbar(PCM, ax=ax)
+    cb = plt.colorbar(PCM, ax=ax)
+    tick_locator = ticker.MaxNLocator(nbins=5)
+    cb.locator = tick_locator
+    cb.update_ticks()
+    plt.show()
 
     # Save and close configurations
     plt.axis('equal')

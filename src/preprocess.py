@@ -8,6 +8,7 @@ import json
 :return *_con: configuration for that section of the program, i.e. simulation controls simulation parameters (i.e.
 flux method), or fluid_con controls information about the working fluid (i.e. CPG air has gamma = 1.4)
 """
+# TODO: Have the pre-process make a specialized mega numba typed dictionary that contains everything of all the other dictionaries
 # Read in the configuration file
 f = open('config.json')
 configuration = json.load(f)

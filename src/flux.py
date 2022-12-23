@@ -3,16 +3,20 @@ import numpy as np
 import helper
 import preprocess as pp
 import initialization as intlzn
+from numba import njit
 
-def F_euler_2d(u):
+
+@njit(cache=True)
+def F_euler_2d(u, y):
     """Computes the flux vector for the 2D compressible Euler equations from
     the state vector.
 
     :param u: State vector
+    :param y: Ratio of specific heats - gamma
     :return: The flux vector for the 2D compressible Euler equations, each column is a direction
     """
     F = np.zeros((4, 2))
-    P = (pp.fluid_con['y'] - 1) * (u[3] - 0.5 * (u[1] ** 2 / u[0] + u[2] ** 2 / u[0]))
+    P = (y - 1) * (u[3] - 0.5 * (u[1] ** 2 / u[0] + u[2] ** 2 / u[0]))
 
     # Continuity
     F[0, 0] = u[1]
@@ -33,13 +37,15 @@ def F_euler_2d(u):
     return F
 
 
-def roe_euler_2d(u_l, u_r, n):
+@njit(cache=True)
+def roe_euler_2d(u_l, u_r, n, y):
     """Computes the Roe Flux from the left cell into the right cell for
     the inviscid Euler Equations
 
     :param u_l: State vector in the left cell [rho, rho*u, rho*v, rho*E]
     :param u_r: State vector in the right cell [rho, rho*u, rho*v, rho*E]
     :param n: Unit normal pointing from left cell to right cell
+    :param y: Ratio of specific heats - gamma
     :return: flux: Flux of state vector from left to right cell
     :return: s: Maximum propagation speed of the state variables
     """
@@ -53,14 +59,14 @@ def roe_euler_2d(u_l, u_r, n):
                 / (math.sqrt(u_l[0]) + math.sqrt(u_r[0]))
     q = np.linalg.norm(np.array([roe_avg_u, roe_avg_v]))
 
-    h_left = (u_l[3] + helper.calculate_static_pressure_single(u_l)) / u_l[0]
+    h_left = (u_l[3] + helper.calculate_static_pressure_single(u_l, y)) / u_l[0]
 
-    h_right = (u_r[3] + helper.calculate_static_pressure_single(u_r)) / u_r[0]
+    h_right = (u_r[3] + helper.calculate_static_pressure_single(u_r, y)) / u_r[0]
 
     roe_avg_h = (math.sqrt(u_l[0]) * h_left + math.sqrt(u_r[0]) * h_right) / (math.sqrt(u_l[0]) + math.sqrt(u_r[0]))
 
     # Speed of sound
-    c = math.sqrt((pp.fluid_con['y'] - 1) * (roe_avg_h - (q ** 2) / 2))
+    c = math.sqrt((y - 1) * (roe_avg_h - (q ** 2) / 2))
 
     # Speed
     u = roe_avg_u * n[0] + roe_avg_v * n[1]
@@ -80,16 +86,16 @@ def roe_euler_2d(u_l, u_r, n):
     s = np.array([0.5 * (eigens[0] + eigens[1]),
                   0.5 * (eigens[0] - eigens[1])])
 
-    g1 = (pp.fluid_con['y'] - 1) * (q ** 2 / 2 * delta_u[0] - (roe_avg_u * delta_u[1] + roe_avg_v * delta_u[2]) + delta_u[3])
+    g1 = (y - 1) * (q ** 2 / 2 * delta_u[0] - (roe_avg_u * delta_u[1] + roe_avg_v * delta_u[2]) + delta_u[3])
     g2 = -u * delta_u[0] + (delta_u[1] * n[0] + delta_u[2] * n[1])
 
     c1 = g1 / c ** 2 * (s[0] - eigens[2]) + g2 / c * s[1]
     c2 = g1 / c * s[1] + (s[0] - eigens[2]) * g2
 
     # Flux vectorization & normals
-    F_l = F_euler_2d(u_l)
+    F_l = F_euler_2d(u_l, y)
     F_l = F_l[:, 0] * n[0] + F_l[:, 1] * n[1]
-    F_r = F_euler_2d(u_r)
+    F_r = F_euler_2d(u_r, y)
     F_r = F_r[:, 0] * n[0] + F_r[:, 1] * n[1]
 
     # Actual Roe Flux
@@ -166,7 +172,7 @@ def compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n):
 
     # Internal edges
     for i in range(mesh['IE'].shape[0]):
-        ie_flux, ie_smax = roe_euler_2d(state[mesh['IE'][i, 2]], state[mesh['IE'][i, 3]], ie_n[i])
+        ie_flux, ie_smax = roe_euler_2d(state[mesh['IE'][i, 2]], state[mesh['IE'][i, 3]], ie_n[i], pp.fluid_con['y'])
 
         residuals[mesh['IE'][i, 2]] += ie_flux * ie_l[i]  # Summing residuals to be taken out of cell i
         residuals[mesh['IE'][i, 3]] -= ie_flux * ie_l[i]  # Summing residuals to negative taken out of cell N (added to cell N)
@@ -192,7 +198,7 @@ def compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n):
 
             # Enforcing no flow through with pressure condition
             be_flux = [0, be_pressure * be_n[i, 0], be_pressure * be_n[i, 1], 0]
-            local_p = helper.calculate_static_pressure_single(state[mesh['BE'][i, 2]])
+            local_p = helper.calculate_static_pressure_single(state[mesh['BE'][i, 2]], pp.fluid_con['y'])
             h = (state[mesh['BE'][i, 2], 3] + local_p) / state[mesh['BE'][i, 2], 0]
             be_smax = abs(u_plus * be_n[i, 0] + v_plus * be_n[i, 1]) \
                       + math.sqrt((pp.fluid_con['y'] - 1) * (h - np.linalg.norm([u_plus, v_plus]) ** 2 / 2))
@@ -200,11 +206,11 @@ def compute_residuals_roe(mesh, state, be_l, be_n, ie_l, ie_n):
 
         elif mesh['Bname'][mesh['BE'][i, 3]] == 'Exit' or mesh['Bname'][mesh['BE'][i, 3]] == 'Outflow':
             # Apply supersonic outflow boundary conditions
-            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], state[mesh['BE'][i, 2]], be_n[i])
+            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], state[mesh['BE'][i, 2]], be_n[i], pp.fluid_con['y'])
 
         elif mesh['Bname'][mesh['BE'][i, 3]] == 'Inflow':
             # Apply freestream inflow boundary conditions
-            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], intlzn.generate_freestream_state(), be_n[i])
+            be_flux, be_smax = roe_euler_2d(state[mesh['BE'][i, 2]], intlzn.generate_freestream_state(), be_n[i], pp.fluid_con['y'])
 
         residuals[mesh['BE'][i, 2]] += np.array(be_flux) * be_l[i]
         sum_sl[mesh['BE'][i, 2]] += be_smax * be_l[i]
