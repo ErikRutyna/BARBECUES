@@ -1,4 +1,4 @@
-# B.A.R.B.E.C.U.E.S. V1.3
+# B.A.R.B.E.C.U.E.S. V1.2.5
 B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the compressible Euler equations. The code is meant to be a testing ground for novel ideas and features in an effort to push the limits of traditional CFD codes by doing standard processes (i.e. initialization or convergence) in non-standard ways. More information about such features can be found in the Wiki (WIP).
 
 
