@@ -1,35 +1,41 @@
-# B.A.R.B.E.C.U.E.S.
-B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the compressible Euler equations. The code is meant to be a testing ground for novel ideas and features in an effort to push the limits of traditional CFD codes by doing standard processes (i.e. initialization or convergence) in non-standard methods. More information about such features can be found in the Wiki.
-
-Boundary conditions must follow this convention in order for the NUMBA JIT to properly function as it cannot easily do string-based comparisons. The boundary condition identifiers are as follows:
-0: Inviscid Wall
-
-1: Supersonic Exit (Used in tracking pressure @ exit of intakes)
-
-2: Supersonic Outflow (Dumptank style outflow)
-
-3: Supersonic Inflow (Freestream @ Mach Number)
+# B.A.R.B.E.C.U.E.S. V1.3
+B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the compressible Euler equations. The code is meant to be a testing ground for novel ideas and features in an effort to push the limits of traditional CFD codes by doing standard processes (i.e. initialization or convergence) in non-standard ways. More information about such features can be found in the Wiki (WIP).
 
 
-For the Flux Method use the following options
+The simulation is controlled through a JSON file called config.json and an example can be found in the source code; a demonstration mesh is currently not provided, and the only meshes accepted are those in *.gri format.
 
-1: Upwind Roe Flux
+## Boundary Conditions
+BCs must follow this convention in order for the NUMBA JIT to properly function. The identifiers are as follows:
 
-2: HLLE Flux
+| Boundary Condition | Flag Number |
+|--------------------|-------------|
+| Inviscid Wall | 0 |
+| (Supersonic) Exit | 1 |
+| Supersonic Outflow | 2 |
+| Supersonic Inflow | 3 |
 
 
-For Convergence use the following options:
+## Flux Methods
+The inviscid flux method must follow this convention in order for the NUMBA JIT to properly function. The identifiers are as follows:
 
-0/1: For Standard/Smart convergence w/ ASCs for Smart convergence as follows:
+| Flux Method | Flag Number |
+|--------------------|-------------|
+| Roe Flux | 1 |
+| HLLE Flux | 2 |
 
-0: Drag
+If no number is specified, or an invalid number is provided, the solver will default to the Roe Flux.
 
-1: Lift
 
-2: Pitching Moment
 
-3: ATPR (Only useful if Supersonic Exist BC exists)
+## Convergence Methods
+There are two options for convergence: Smart and Standard. Smart convergence detects when certain solution-dependent variables (ASCs) become asymptotic and terminate the simulation early. Standard convergence uses the L1 residual norm of the Euler equations to determine convergence. The flag for these is "0" for Standard Convergence, and "1" for Smart Convergence. If using smart convergence you need some number of the following ASCs:
 
+| ASC | Flag Number |
+|--------------------|-------------|
+| Drag | 0 |
+| Lift | 1 |
+| Pitching Moment | 2 |
+| Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3 |
 
 # Changelog
 V1.3 Numba JIT integration for continued speed increases.
