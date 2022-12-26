@@ -38,7 +38,7 @@ There are two options for convergence: Smart and Standard. Smart convergence det
 | Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3 |
 
 # Changelog
-V1.3 Numba JIT integration for continued speed increases.
+V1.2.5 Numba JIT integration for continued speed increases. AMR & MOC-based initialization are temporarily broken until it has been updated to work with NUMBA JIT.
 
 V1.2 Conversion of simulation input parameters to a JSON format and source code reconfiguration.
 
