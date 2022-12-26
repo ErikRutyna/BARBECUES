@@ -1,4 +1,3 @@
-import preprocess as pp
 import initialization as initzn
 import numpy as np
 import math
@@ -6,15 +5,17 @@ import cell_geometry_formulas as cgf
 import compressible_flow_formulas as cff
 from numba import njit
 
-def calculate_atpr(stag_pressure, mesh):
+
+@njit(cache=True)
+def calculate_atpr(V, BE, stag_pressure):
     """Calculates the average total pressure recovered (ATPR) along the exit plane of the isolator.
 
+    :param V: Node coodinates
+    :param BE: Boundary Edge information [nodeA, nodeB, state i, edge identifier]
     :param stag_pressure: Nx1 array of stagnation pressure
-    :param mesh: Mesh to get boundary edges
     :return: Double that is the average total pressure recovery (ATPR)
     """
-    # Boundary Edges at the isolator exit
-    exit_edges = mesh['BE'][mesh['BE'][:, 3] == 1, :]
+    exit_edges = BE[BE[:, 3] == 1, :]
 
     # Boundary edge stagnation pressures
     boundary_stagnation = stag_pressure[exit_edges[:, 2]]
@@ -26,7 +27,7 @@ def calculate_atpr(stag_pressure, mesh):
     delta_y = np.zeros(len(exit_edges))
     for i in range(len(delta_y)):
         # delta_y = y_nodeB - y_nodeA
-        delta_y[i] = abs(mesh['V'][exit_edges[i, 1]][1] - mesh['V'][exit_edges[i, 0]][1])
+        delta_y[i], _ = cgf.edge_properties_calculator(V[exit_edges[i, 1]], V[exit_edges[i, 0]])
         # Total length of the exit plane
         d += delta_y[i]
 
@@ -36,7 +37,8 @@ def calculate_atpr(stag_pressure, mesh):
     return atpr
 
 
-def calculate_stagnation_pressure(state, mach):
+@njit(cache=True)
+def calculate_stagnation_pressure(state, mach, y):
     """Calculates the stagnation pressure for each state vector
 
     :param state: Nx4 array of state variables - one per cell [rho, rho*u, rho*v, rho*E]
@@ -44,18 +46,19 @@ def calculate_stagnation_pressure(state, mach):
     :return: Nx1 array of stagnation pressures - one per cell
     """
     # Constants to be used in the stagnation pressure formula
-    c_1 = (pp.fluid_con['y'] - 1) / 2
-    c_2 = pp.fluid_con['y'] / (pp.fluid_con['y'] - 1)
+    c_1 = (y - 1) / 2
+    c_2 = y / (y - 1)
 
     # Local static pressure per state vector
-    pressure = calculate_static_pressure(state)
+    pressure = calculate_static_pressure(state, y)
     # Stagnation pressure
     stagnation_pressure = np.multiply(np.power(1 + c_1 * np.power(mach, 2), c_2), pressure)
 
     return stagnation_pressure
 
 
-def calculate_mach(state):
+@njit(cache=True)
+def calculate_mach(state, y):
     """Calculates the Mach number for each unique state vector.
 
     :param state: Local state vector in a given cell
@@ -65,15 +68,16 @@ def calculate_mach(state):
     q = np.sqrt(np.power(np.divide(state[:, 1], state[:, 0]), 2) + np.power(np.divide(state[:, 2], state[:, 0]), 2))
 
     # Use speed of sound, c = sqrt(y*p/rho)
-    p = calculate_static_pressure(state)
-    c = math.sqrt(pp.fluid_con['y']) * np.sqrt(np.divide(p, state[:, 0]))
+    p = calculate_static_pressure(state, y)
+    c = math.sqrt(y) * np.sqrt(np.divide(p, state[:, 0]))
 
     mach = np.divide(q, c)
 
     return mach
 
 
-def calculate_mach_single(state):
+@njit(cache=True)
+def calculate_mach_single(state, y):
     """Calculates Mach number for a single state vector slice - only exists because I was too lazy to fix the original
     mach_calc function to account for single slices and whole mesh arrays.
 
@@ -83,27 +87,28 @@ def calculate_mach_single(state):
     # Velocity
     u = state[1] / state[0]
     v = state[2] / state[0]
-    q = np.linalg.norm([u, v])
+    q = np.linalg.norm(np.array((u, v)))
 
     # Enthalpy
-    h = (state[3] + calculate_static_pressure(state)) / state[0]
+    h = (state[3] + calculate_static_pressure_single(state, y)) / state[0]
 
     # Speed of sound
-    c = math.sqrt((pp.fluid_con['y'] - 1) * (h - q ** 2 / 2))
+    c = np.sqrt((y - 1) * (h - q ** 2 / 2))
 
     mach = q / c
 
     return mach
 
 
-def calculate_static_pressure(state):
+@njit(cache=True)
+def calculate_static_pressure(state, y):
     """Calculates local static pressure from the given state.
 
     :param state: Nx4 array of Euler state variables
     :return: pressure: local static pressure for each state vector
     """
     # Leading constant term
-    c = (pp.fluid_con['y'] - 1)
+    c = (y - 1)
     # Velocity term
     q = np.power(np.divide(state[:, 1], state[:, 0]), 2) + np.power(np.divide(state[:, 2], state[:, 0]), 2)
     # p = (y - 1) * (rho*E - 0.5 * rho * q^2)
@@ -112,6 +117,7 @@ def calculate_static_pressure(state):
     return pressure
 
 
+@njit(cache=True)
 def calculate_static_pressure_single(state, y):
     """Calculates local static pressure from the given state.
 
@@ -129,81 +135,93 @@ def calculate_static_pressure_single(state, y):
     return pressure
 
 
-def calculate_pressure_coefficient(state, y):
+@njit(cache=True)
+def calculate_pressure_coefficient(state, M, a, y):
     """Calculate the pressure coefficient according to the formula C_p = (P - P_infty) / (P0 - P_infty)
 
     :param state: Nx4 state vector set
+    :param M: Cell's local Mach number
+    :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
     :return: cp - array of pressure coefficients
     """
     # Static pressures
-    p = calculate_static_pressure(state)
+    p = calculate_static_pressure(state, y)
     # Stagnation pressures
-    p0 = calculate_stagnation_pressure(state, calculate_mach(state))
+    p0 = calculate_stagnation_pressure(state, calculate_mach(state, y), y)
     # Freestream static pressure from freestream state
-    pinf = calculate_static_pressure_single(initzn.generate_freestream_state(), y)
+    pinf = calculate_static_pressure_single(initzn.init_state_mach(M, a, y), y)
 
     cp = np.divide(p - pinf, p0 - pinf)
 
     return cp
 
 
-def calculate_forces_moments(mesh, state):
+@njit(cache=True)
+def calculate_forces_moments(V, BE, state, M, a, y):
     """Calculate the drag coefficients, lift coefficient, and the pitching moment about the origin of the domain (0,0).
 
-    :param mesh: Mesh in the loaded *.gri format
+    :param V: Node coodinates
+    :param BE: Boundary Edge information [nodeA, nodeB, state i, edge identifier]
     :param state: Nx4 state vector set
+    :param a: Angle of Attack
     :return: cd, cl, cmx (force and moment coefficients)
     """
-    cp = calculate_pressure_coefficient(state, pp.fluid_con['y'])
+    cp = calculate_pressure_coefficient(state, M, a, y)
 
     cd = 0
     cl = 0
     cmx = 0
 
     # Projected x-length of the object in the flow
-    l_tot = abs((mesh['V'][mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]][:, 0:2]][:, 0]).max() - \
-                (mesh['V'][mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]][:, 0:2]][:, 0]).min())
+    nodes = []
+    for i in range(BE.shape[0]):
+        if BE[i, 3] == 0:
+            nodes.append(BE[i, 0])
+            nodes.append(BE[i, 1])
 
-    wall_bes = mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]]
+    x_pos = []
+    for i in range(len(nodes)):
+        x_pos.append(V[nodes[i], 0])
+    x_pos = np.array(x_pos)
 
-    for be in wall_bes:
-        l, n = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
-        # Pressure integrals for lift and drag
-        cl += 1 / l_tot * cp[be[2]] * -n[1] * l * math.cos(pp.flight_con['angle_of_attack'])
-        cd += 1 / l_tot * cp[be[2]] * n[0] * l
+    l_tot = np.abs(x_pos.max() - x_pos.min())
 
-        # Moment = F x d, d is defined as distance from origin to midpoint of edge
-        midpoint = (mesh['V'][be[0]] + mesh['V'][be[1]]) / 2
-        cmx += (cp[be[2]] * n[0] * l * midpoint[0] - cp[be[2]] * n[1] * l * midpoint[1]) / l_tot ** 2
+    for i in range(BE.shape[0]):
+        if BE[i, 3] == 0:
+            l, n = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
+            # Pressure integrals for lift and drag
+            cl += 1 / l_tot * cp[BE[i, 2]] * -n[1] * l * math.cos(a)
+            cd += 1 / l_tot * cp[BE[i, 2]] * n[0] * l
+
+            # Moment = F x d, d is defined as distance from origin to midpoint of edge
+            midpoint = (V[BE[i, 0]] + V[BE[i, 1]]) / 2
+            cmx += (cp[BE[i, 2]] * n[0] * l * midpoint[0] - cp[BE[i, 2]] * n[1] * l * midpoint[1]) / l_tot ** 2
 
     return cd, cl, cmx
 
-def calculate_plate_friction(mesh, state):
+
+@njit(cache=True)
+def calculate_plate_friction(V, BE, state, mu_inf, Rex_inf, cv, tinf, mu_ref, t_ref, S):
     """Calculate the skin drag coefficient for a flat plate (boundary section) according to the NASA paper.
 
-    :param mesh: Mesh in the loaded *.gri format
+    :param V: Node coodinates
+    :param BE: Boundary Edge information [nodeA, nodeB, state i, edge identifier]
     :param state: Nx4 state vector set
     :return: cf_approx
     """
     cf_approx = 0
 
-    wall_bes = mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]]
+    for be in BE:
+        if be[3] == 0:
+            l, _ = cgf.edge_properties_calculator(V[be[0]], V[be[1]])
+            # T = E / Cv
+            t_local = state[be[2], 3] / state[be[2], 0] / cv
+            mu_local = cff.sutherland_viscosity(t_local, mu_ref, t_ref, S)
+            cw = mu_local * tinf / (mu_inf * t_local)
 
-    # Additional freestream quantities for calculating a viscous drag coefficient
-    mu_inf = cff.sutherland_viscosity(pp.flight_con['tinf'])
-    Re_x = pp.flight_con['pinf'] / (pp.flight_con['tinf'] * pp.fluid_con['R']) * \
-           pp.flight_con['freestream_mach_numer'] * math.sqrt(pp.flight_con['tinf'] * pp.fluid_con['R'] * pp.fluid_con['y']) / mu_inf
-
-    for be in wall_bes:
-        l, _ = cgf.edge_properties_calculator(mesh['V'][be[0]], mesh['V'][be[1]])
-        # T = E / Cv
-        t_local = state[be[2], 3] / state[be[2], 0] / pp.fluid_con['cv']
-        mu_local = cff.sutherland_viscosity(t_local)
-        cw = mu_local * pp.flight_con['tinf'] / (mu_inf * t_local)
-
-        # From the NASA paper in the citations
-        cf_local = 0.664 / (math.sqrt(Re_x * l / cw))
-        cf_approx += cf_local
+            # From the NASA paper in the citations
+            cf_local = 0.664 / (math.sqrt(Rex_inf * l / cw))
+            cf_approx += cf_local
 
     return cf_approx

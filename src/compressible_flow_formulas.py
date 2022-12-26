@@ -1,6 +1,7 @@
+from numba import njit
 import math
 import numpy as np
-import preprocess as pp
+
 
 
 def f(beta, theta, M1, gamma):
@@ -326,13 +327,16 @@ def PMexpansion(theta, M1, T1, p1, gamma):
     return result
 
 
-def sutherland_viscosity(t):
+@njit(cache=True)
+def sutherland_viscosity(t, mu_ref, t_ref, S):
     """Calculates the viscosity using Sutherland's model for a given temperature.
 
-    :param t: Temperature to evaluate viscoity at
+    :param t: Temperature to evaluate viscosity at
+    :param mu_ref: Reference viscosity (1.716e-5 Pa*s for CPG air)
+    :param t_ref: Reference temperature (273 K for CPG air)
+    :param S: Sutherland reference constant (111 K for CPG air)
     :return: mu - kinematic viscosity at temperature t
     """
-    mu = pp.fluid_con['viscosity_ref'] * (t / pp.fluid_con['viscosity_ref_temp']) ** 1.5 *\
-         (pp.fluid_con['viscosity_ref_temp'] + pp.fluid_con['viscosity_ref_S']) / (t + pp.fluid_con['viscosity_ref_S'])
+    mu = np.multiply(np.multiply(mu_ref, np.power(t / t_ref, 1.5)), np.divide((t_ref + S), (t + S)))
 
     return mu

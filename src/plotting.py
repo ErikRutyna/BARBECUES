@@ -33,7 +33,7 @@ def plot_mesh(Mesh, fname):
     plt.close(f)
 
 
-def plot_mach(Mesh, state, fname):
+def plot_mach(Mesh, state, fname, config):
     """Contour/tricolor plot of the Mach number at each cell in the mesh.
 
     :param Mesh: Mesh dictionary
@@ -44,7 +44,7 @@ def plot_mach(Mesh, state, fname):
     figure = plt.figure(figsize=(12, 12))
 
     # Calculate Mach numbers to plot
-    mach = helper.calculate_mach(state)
+    mach = helper.calculate_mach(state, config['y'])
 
     # Mach number contour plotting
     plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=mach, shading='flat', cmap='jet')
@@ -61,31 +61,29 @@ def plot_mach(Mesh, state, fname):
     tick_locator = ticker.MaxNLocator(nbins=5)
     cb.locator = tick_locator
     cb.update_ticks()
-    plt.show()
 
     # Save and close configurations
     plt.axis('equal')
-    plt.tick_params(axis='both', labelsize=12)
     figure.tight_layout()
     plt.savefig(fname)
     plt.close(figure)
 
 
-def plot_stagnation_pressure(Mesh, state, fname):
+def plot_stagnation_pressure(mesh, state, fname, config):
     """Contour/tricolor plot of the stagnation pressure at each cell in the mesh.
 
-    :param Mesh: Mesh dictionary
+    :param mesh: Mesh dictionary
     :param state: Nx4 state vectory array
     :param fname: filename for what the figure is saved under
     """
-    V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
+    V = mesh['V']; E = mesh['E']; BE = mesh['BE']
     figure = plt.figure(figsize=(12, 12))
 
     # Calculating the stagnation pressure
-    mach = helper.calculate_mach(state)
-    stagnation_pressure = helper.calculate_stagnation_pressure(state, mach)
+    mach = helper.calculate_mach(state, config['y'])
+    stagnation_pressure = helper.calculate_stagnation_pressure(state, mach, config['y'])
     normalized_stagnation_pressure = np.divide(stagnation_pressure, max(stagnation_pressure))
-    ATPR = helper.calculate_atpr(normalized_stagnation_pressure, Mesh)
+    ATPR = helper.calculate_atpr(V, BE, normalized_stagnation_pressure)
 
     # Stagnation pressure contour plotting
     plt.tripcolor(V[:,0], V[:,1], triangles=E, facecolors=normalized_stagnation_pressure, shading='flat', cmap='jet')
@@ -101,24 +99,22 @@ def plot_stagnation_pressure(Mesh, state, fname):
     tick_locator = ticker.MaxNLocator(nbins=5)
     cb.locator = tick_locator
     cb.update_ticks()
-    plt.show()
 
     # Save and close configurations
     plt.axis('equal')
-    plt.tick_params(axis='both', labelsize=12)
     figure.tight_layout()
     plt.savefig(fname)
     plt.close(figure)
 
 
-def plot_mesh_flagged(Mesh, flagged_cells, fname):
+def plot_mesh_flagged(mesh, flagged_cells, fname):
     """Plots the mesh and also highlights the cells flagged for refinement.
 
     :param Mesh: Mesh dictionary
     :param flagged_cells: Flagged cell indices
     :param fname: Filename for what the figure is saved under
     """
-    V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
+    V = mesh['V']; E = mesh['E']; BE = mesh['BE']
     f = plt.figure(figsize=(12,12))
     # Plotting the mesh
     plt.triplot(V[:,0], V[:,1], E, '-', color='black')
@@ -126,7 +122,7 @@ def plot_mesh_flagged(Mesh, flagged_cells, fname):
     for i in range(BE.shape[0]):
         plt.plot(V[BE[i,0:2],0],V[BE[i,0:2],1], '-', linewidth=2, color='black')
     # Plotting the flagged cells
-    plt.triplot(V[:, 0], V[:, 1], Mesh['E'][flagged_cells], '-', color='red')
+    plt.triplot(V[:, 0], V[:, 1], mesh['E'][flagged_cells], '-', color='red')
 
     # Save and close configurations
     plt.axis('equal')
@@ -151,25 +147,25 @@ def plot_grid(nodes, fname):
     plt.close(f)
 
 
-def plot_moc(Mesh, moc, fname):
+def plot_moc(mesh, moc, fname):
     """Plots the characteristic lines as they reflect off of the walls in the domain when a MOC initialization is
     performed.
 
-    :param Mesh: Mesh dictionary
+    :param mesh: Mesh dictionary
     :param moc: List of characteristic lines and their reflection points
     :param fname: Filename for what the figure is saved under
     """
-    V = Mesh['V']; BE = Mesh['BE']
+    V = mesh['V']; BE = mesh['BE']
     f = plt.figure(figsize=(12,12))
     # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
-        if Mesh['Bname'][BE[i, 3]] == 'Wall':
+        if mesh['Bname'][BE[i, 3]] == 'Wall':
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='magenta')
-        elif Mesh['Bname'][BE[i, 3]] == 'Inflow':
+        elif mesh['Bname'][BE[i, 3]] == 'Inflow':
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='red')
-        elif Mesh['Bname'][BE[i, 3]] == 'Outflow':
+        elif mesh['Bname'][BE[i, 3]] == 'Outflow':
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='blue')
-        elif Mesh['Bname'][BE[i, 3]] == 'Exit':
+        elif mesh['Bname'][BE[i, 3]] == 'Exit':
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='cyan')
 
     for i in range(len(moc)):
@@ -227,17 +223,17 @@ def plot_performance(coefficients):
     f.savefig('coefficients.png')
 
 
-def plot_config(mesh, state, residuals, coefficients, fname, i):
+def plot_config(mesh, state, residuals, coefficients, config, i):
     """Plotting driver that makes all the plots according to the data configuration config.
 
-    :param mesh: Mesh dictionary
+    :param mesh: Mesh dictionary {'E', 'V', 'IE', 'BE', 'Bname'}
     :param state: Nx4 state vector array
     :param residuals: Nx5 array of residuals [mass, x-momentum, y-momentum, energy, L1-Total]
-    :param fname: filename for what the figure is saved under
+    :param config: All simulation configuration options influding fluid information and filename
     :param i: Adaptive cycle number, is 0 for no adaptations
     """
-    if pp.data_con['plot_mesh']: plot_mesh(mesh, fname + str(i) + '.png')
-    if pp.data_con['plot_mach']: plot_mach(mesh, state, fname + '_M_' + str(i) + '.png')
-    if pp.data_con['plot_stag_press']: plot_stagnation_pressure(mesh, state, fname + '_p0_' + str(i) + '.png')
-    if pp.data_con['plot_residuals'] and residuals.shape[0] != 0: plot_residuals(residuals)
-    if pp.data_con['plot_performance'] and coefficients.shape[0] != 0: plot_performance(coefficients)
+    if config['plot_mesh']: plot_mesh(mesh, config['filename'] + str(i) + '.png')
+    if config['plot_mach']: plot_mach(mesh, state, config['filename'] + '_M_' + str(i) + '.png', config)
+    if config['plot_stag_press']: plot_stagnation_pressure(mesh, state, config['filename'] + '_p0_' + str(i) + '.png', config)
+    if config['plot_residuals'] and residuals.shape[0] != 0: plot_residuals(residuals)
+    if config['plot_performance'] and coefficients.shape[0] != 0: plot_performance(coefficients)
