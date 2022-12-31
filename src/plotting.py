@@ -221,6 +221,7 @@ def plot_performance(coefficients):
 
     f.tight_layout()
     f.savefig('coefficients.png')
+    plt.close(f)
 
 
 def plot_config(mesh, state, residuals, coefficients, config, i):

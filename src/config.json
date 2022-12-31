@@ -20,7 +20,7 @@
 
             "smart_convergence_length": 42,
             "smart_convergence_error_tol": 0.025,
-            "smart_convergence_ascs": [0, 1, 2, 3]
+            "smart_convergence_ascs": [0]
         }
     ],
 

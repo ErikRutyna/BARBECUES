@@ -32,6 +32,10 @@ def main():
 
     # TODO: Solution initialization driver function
     # Solution Initialization
+    # state_vectors = intlzn.initialize_boundary_dist(mesh['E'], mesh['V'],
+    #                                                 config['freestream_mach_numer'],
+    #                                                 config['angle_of_attack'],
+    #                                                 config['y'])
     state_vectors = intlzn.initialize_boundary_weak(mesh['E'].shape[0],
                                                       config['freestream_mach_numer'],
                                                       config['angle_of_attack'],
@@ -65,8 +69,9 @@ def main():
         runtime = timeit.default_timer() - start_time
         pop.postprocess(mesh, state_vectors, coefficients, residuals, config, 0, runtime)
         print('Simulation complete - check results files.')
-        return
-
+        # return
+    foo = meshref.find_flagged_edges(state_vectors, mesh['E'], mesh['V'], mesh['IE'], mesh['BE'], config['adaptation_percentage'], config['y'])
+    return
     # If adaptive cycles, being the adaptation process
     for i in range(config['adaptive_cycles']):
         # Refine the mesh and interpolate solution to the refined grid

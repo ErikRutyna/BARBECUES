@@ -4,6 +4,9 @@ import math
 import readgri
 import flux
 import preprocess as pp
+from numba import njit
+import helper
+
 
 def reorient_ccw(node1, node2, node3, node_list):
     """Re-orients the given set of nodes to be in a counter-clockwise order
@@ -19,13 +22,14 @@ def reorient_ccw(node1, node2, node3, node_list):
     node3_coord = node_list[node3]
 
     # https://www.geeksforgeeks.org/orientation-3-ordered-points/
-    if ((node2_coord[1] - node1_coord[1]) * (node3_coord[0] - node2_coord[0]) -\
-            (node3_coord[1] - node2_coord[1]) * (node2_coord[0] - node1_coord[0])) < 0:
+    if ((node2_coord[1] - node1_coord[1]) * (node3_coord[0] - node2_coord[0]) - \
+        (node3_coord[1] - node2_coord[1]) * (node2_coord[0] - node1_coord[0])) < 0:
         return np.array([node1, node2, node3])
     else:
         return np.array([node3, node2, node1])
 
-# TODO: Remake another form with standard flagged-edge splitting 1 half, 2 largest angle, 3 uniform
+
+# TODO: Fix this adaptation algorithm such that it works - but doesn't need to work with NUMBA, just work
 def refine_interp_uniform(mesh, state, fname):
     """Performs adaptive mesh refinement on the given mesh from the results of the state vector and large jumps in Mach
     number across cell boundaries. Divides flagged cells uniformly, cells w/ >= 2 neighbors flagged uniformly, and cells
@@ -33,6 +37,7 @@ def refine_interp_uniform(mesh, state, fname):
 
     :param mesh: Mesh of the domain
     :param state: Nx4 state vector
+    :param fname: Filename that the newly saved mesh is saved as
     :return:
     """
     flag_cell, split_cell, flag_be, flag_ie, split_be, split_ie = find_uniform_splitting(state, mesh)
@@ -90,7 +95,8 @@ def refine_interp_uniform(mesh, state, fname):
 
             # Grab the midpoint of the recently found split edge
             midpoint_split = (mesh['V'][split_edge[0]] + mesh['V'][split_edge[1]]) / 2
-            if not np.any(np.equal(midpoint_split, mesh['V']).all(1)): mesh['V'] = np.vstack((mesh['V'], midpoint_split))
+            if not np.any(np.equal(midpoint_split, mesh['V']).all(1)): mesh['V'] = np.vstack(
+                (mesh['V'], midpoint_split))
             midpoint_split_index = np.where(np.equal(midpoint_split, mesh['V']).all(1))[0][0]
 
             # Find the node that forms the bisector with the edge
@@ -119,7 +125,7 @@ def refine_interp_uniform(mesh, state, fname):
 
     # Node information
     for node in mesh['V']:
-        f.write('%.15e %.15e\n'%(node[0], node[1]))
+        f.write('%.15e %.15e\n' % (node[0], node[1]))
 
     # Boundary edge information
     f.write('{0}\n'.format(len(mesh['Bname'])))
@@ -131,29 +137,30 @@ def refine_interp_uniform(mesh, state, fname):
         if np.any(np.equal(be, flag_be).all(1)) or np.any(np.equal(be, flag_ie).all(1)):
             midpoint = (mesh['V'][be[0]] + mesh['V'][be[1]]) / 2
             midpoint_index = np.where(np.equal(midpoint, mesh['V']).all(1))[0][0]
-            if not [be[0], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append([be[0], midpoint_index])
-            if not [be[1], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append([be[1], midpoint_index])
+            if not [be[0], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append(
+                [be[0], midpoint_index])
+            if not [be[1], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append(
+                [be[1], midpoint_index])
             continue
         boundary_pairs[be[3]].append([be[0], be[1]])
     for i in range(len(mesh['Bname'])):
         f.write('{0} 2 {1}\n'.format(len(boundary_pairs[i]), mesh['Bname'][i]))
         for pair in boundary_pairs[i]:
-            f.write('{0} {1}\n'.format(pair[0]+1, pair[1]+1))
+            f.write('{0} {1}\n'.format(pair[0] + 1, pair[1] + 1))
 
     # Element writing
     f.write('{0} 1 TriLagrange\n'.format(new_elements_full.shape[0]))
     for element in new_elements_full:
         temp_element = reorient_ccw(element[0], element[1], element[2], mesh['V'])
-        f.write('{0} {1} {2}\n'.format(temp_element[0]+1, temp_element[1]+1, temp_element[2]+1))
+        f.write('{0} {1} {2}\n'.format(temp_element[0] + 1, temp_element[1] + 1, temp_element[2] + 1))
     f.close()
 
-    # Generate the new mesh using the hasing provided by the reading of the gri file
+    # Generate the new mesh using the hashing provided by the reading of the gri file
     mesh = readgri.readgri(fname)
 
     return mesh, state
 
 
-# TODO: Vectorize out loops if possible using logical indexing - speed up computation time
 def find_uniform_splitting(state, mesh):
     """Creates a unique array of cell indices that are to be split uniformly and split to maintain conformity. Any cell
     that has 2 uniform neighbors becomes a uniform cell, this process continues until either all cells are uniform or
@@ -181,7 +188,7 @@ def find_uniform_splitting(state, mesh):
             v = state[be[2]][2] / state[be[2]][0]
             q = np.dot(be_n, np.array([u, v]))
             flux_c = flux.F_euler_2d(state[be[2]], pp.fluid_con['y'])
-            h_l = (flux_c[3, 0] + flux_c[3, 1]) / ( flux_c[0, 0] + flux_c[0, 1])
+            h_l = (flux_c[3, 0] + flux_c[3, 1]) / (flux_c[0, 0] + flux_c[0, 1])
             c = math.sqrt((pp.fluid_con['y'] - 1) * (h_l - q ** 2 / 2))
 
             error = abs(q / c) * be_l
@@ -200,7 +207,7 @@ def find_uniform_splitting(state, mesh):
         u_l_v = u_l[2] / u_l[0]
         q_l = np.linalg.norm([u_l_u, u_l_v])
         flux_l = flux.F_euler_2d(u_l, pp.fluid_con['y'])
-        h_l = (flux_l[3, 0] + flux_l[3, 1]) / ( flux_l[0, 0] + flux_l[0, 1])
+        h_l = (flux_l[3, 0] + flux_l[3, 1]) / (flux_l[0, 0] + flux_l[0, 1])
         c_l = math.sqrt((pp.fluid_con['y'] - 1) * (h_l - q ** 2 / 2))
         m_l = q_l / c_l
 
@@ -210,7 +217,7 @@ def find_uniform_splitting(state, mesh):
         u_r_v = u_r[2] / u_r[0]
         q_r = np.linalg.norm([u_r_u, u_r_v])
         flux_r = flux.F_euler_2d(u_r, pp.fluid_con['y'])
-        h_r = (flux_r[3, 0] + flux_r[3, 1]) / ( flux_r[0, 0] + flux_r[0, 1])
+        h_r = (flux_r[3, 0] + flux_r[3, 1]) / (flux_r[0, 0] + flux_r[0, 1])
         c_r = math.sqrt((pp.fluid_con['y'] - 1) * (h_r - q ** 2 / 2))
 
         m_r = q_r / c_r
@@ -244,11 +251,11 @@ def find_uniform_splitting(state, mesh):
         cell_nodes = mesh['E'][cell]
         # Use pairs of nodes to find the IEs of the cell that's flagged
         nodepairs = np.array([[cell_nodes[0], cell_nodes[1]],
-                             [cell_nodes[1], cell_nodes[0]],
-                             [cell_nodes[1], cell_nodes[2]],
-                             [cell_nodes[2], cell_nodes[1]],
-                             [cell_nodes[2], cell_nodes[0]],
-                             [cell_nodes[0], cell_nodes[2]]])
+                              [cell_nodes[1], cell_nodes[0]],
+                              [cell_nodes[1], cell_nodes[2]],
+                              [cell_nodes[2], cell_nodes[1]],
+                              [cell_nodes[2], cell_nodes[0]],
+                              [cell_nodes[0], cell_nodes[2]]])
         for row in nodepairs:
             if np.any(np.equal(row, mesh['IE'][:, 0:2]).all(1)):
                 ie_index = np.where(np.equal(row, mesh['IE'][:, 0:2]).all(1))[0][0]
@@ -301,3 +308,103 @@ def find_uniform_splitting(state, mesh):
     flag_ie_split = np.delete(flag_ie_split, 0, axis=0)
 
     return flagged_cells, split_cells, flagged_be, flagged_ie, None, flag_ie_split
+
+
+@njit(cache=True)
+def find_flagged_edges(state, E, V, IE, BE, f, y):
+    """Finds the flagged edges and flags cells and then generates a Cell-to-Edge matrix of what edges of each cell need
+    to be refined to fit the 1-2-3 flagged refinement pattern.
+
+    :param state: State vector array
+    :param E: Element-2-Node matrix
+    :param V: Coordinates of nodes
+    :param IE: Internal edge array [nodeA, nodeB, cell left, cell right]
+    :param BE: Boundary edge array [nodeA, nodeB, cell index, boundary flag]
+    :param f: Number of edges to flag for refinement
+    :param y: Ratio of specific heats - gamma
+    """
+    ele_to_flag_edges = np.zeros((E.shape[0], 3))
+
+    # Mach number in every cell
+    mach = helper.calculate_mach(state, y)
+
+    # There is one error per boundary edge and internal edge
+    error = np.zeros((IE.shape[0] + BE.shape[0], 3))
+
+    for i in range(IE.shape[0]):
+        l, _ = cgf.edge_properties_calculator(V[IE[i, 0]], V[IE[i, 1]])
+        error[i, :] = np.array((np.abs(mach[IE[i, 2]] - mach[IE[i, 3]]) * l, IE[i, 2], IE[i, 3]))
+
+    for i in range(BE.shape[0]):
+        l, n = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
+
+        u = state[BE[i, 2], 1] / state[BE[i, 2], 0]
+        v = state[BE[i, 2], 2] / state[BE[i, 2], 0]
+        q = np.dot(n, np.array((u, v)))
+        error[IE.shape[0] + i, :] = np.array((np.abs(q / mach[BE[i, 2]]) * l, BE[i, 2], -1))
+
+    error = error[(-error[:, 0]).argsort()]
+    error = error[0:math.ceil(error.shape[0] * f), :]
+
+    # Generate a unique list of cell indices that are flagged for refinement
+    flagged_cells = np.unique(error[:, 1::].flatten())
+
+    # Generate a unique listing of node pairs that are used to track the flagged edges
+    node_pairs = np.empty((0, 2))
+    for cell in flagged_cells:
+        if cell == -1: continue
+        pair1 = np.array((E[int(cell), 0], E[int(cell), 1]))
+        pair2 = np.array((E[int(cell), 1], E[int(cell), 2]))
+        pair3 = np.array((E[int(cell), 2], E[int(cell), 0]))
+        temp_pair = np.vstack((pair1, pair2, pair3))
+        node_pairs = np.vstack((node_pairs, np.reshape(temp_pair, (3, 2))))
+
+    for i in range(E.shape[0]):
+        # If the index is one of the flagged cells we can skip checking for edges since we know all edges are flagged
+        if (np.abs(flagged_cells - i)).min() == 0:
+            ele_to_flag_edges[i] = np.array((1, 2, 3))
+            continue
+
+        # 6 Possible combinations of node pairs per cell that might be in the node_pairs array
+        pair_1a = np.array((E[i, 0], E[i, 1]), dtype=np.int32)
+        pair_2a = np.array((E[i, 1], E[i, 2]), dtype=np.int32)
+        pair_3a = np.array((E[i, 2], E[i, 0]), dtype=np.int32)
+
+        pair_1b = np.flip(pair_1a)
+        pair_2b = np.flip(pair_2a)
+        pair_3b = np.flip(pair_3a)
+
+        # Check the pair 1's to see if this edge is flagged
+        if (np.sum(np.abs(node_pairs - pair_1a), axis=1)).min() == 0 or \
+                (np.sum(np.abs(node_pairs - pair_1b), axis=1)).min() == 0:
+            ele_to_flag_edges[i, 0] = 1
+
+        # Check the pair 2's to see if this edge is flagged
+        if (np.sum(np.abs(node_pairs - pair_2a), axis=1)).min() == 0 or \
+                (np.sum(np.abs(node_pairs - pair_2b), axis=1)).min() == 0:
+            ele_to_flag_edges[i, 1] = 2
+
+        # Check the pair 3's to see if this edge is flagged
+        if (np.sum(np.abs(node_pairs - pair_3a), axis=1)).min() == 0 or \
+                (np.sum(np.abs(node_pairs - pair_3b), axis=1)).min() == 0:
+            ele_to_flag_edges[i, 2] = 3
+
+    return ele_to_flag_edges
+
+
+# TODO: Finish writing these functions
+@njit(cache=True)
+def split_cell():
+    pass
+
+
+@njit(cache=True)
+def write_new_mesh():
+    pass
+
+
+@njit(cache=True)
+def adapt_mesh():
+    pass
+
+
