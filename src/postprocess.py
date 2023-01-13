@@ -23,7 +23,9 @@ def postprocess(mesh, state, coefficients, residuals, config, i, t):
 
     # Output file writing
     f = open(config['filename'] + '.out', 'w')
-    f.write('Simulation Runtime: {0}s\n\n'.format(t))
+    f.write('Simulation Runtime: {0}s\n'.format(t))
+    f.write('Number of iterations: {0}\n'.format(residuals[:, 0].shape[0]))
+    f.write('Time per iteration: {0}\n\n'.format(t / residuals[:, 0].shape[0]))
 
     # Simulation specific settings
     f.write('Simulation Configuration Parameters:\n')
