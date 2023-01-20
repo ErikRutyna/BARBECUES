@@ -38,7 +38,9 @@ There are two options for convergence: Smart and Standard. Smart convergence det
 | Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3 |
 
 # Changelog
-V1.2.5 Numba JIT integration for continued speed increases. AMR & MOC-based initialization are temporarily broken until it has been updated to work with NUMBA JIT.
+V1.2.6 Original AMR algorithm (mesh_refinement.refine_interp_uniform()) works, also newer and better refinement algorithm (mesh_refinement.adapt_mesh()) that is fully Numba compatible, so it is both faster and produces better quality meshes.
+
+V1.2.5 Numba JIT integration for continued speed increases. AMR & MOC-based initialization are temporarily broken until it has been updated to work with Numba JIT.
 
 V1.2 Conversion of simulation input parameters to a JSON format and source code reconfiguration.
 
