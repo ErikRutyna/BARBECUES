@@ -71,13 +71,12 @@ def main():
         pop.postprocess(mesh, state_vectors, coefficients, residuals, config, 0, runtime)
         print('Simulation complete - check results files.')
         return
-    meshref.adapt_mesh(state_vectors, mesh['E'], mesh['V'], mesh['IE'], mesh['BE'], config['adaptation_percentage'], config['y'], 'foo.gri')
 
     # If adaptive cycles, being the adaptation process
     for i in range(config['adaptive_cycles']):
         # Refine the mesh and interpolate solution to the refined grid
-        mesh, state_vectors = meshref.refine_interp_uniform(mesh, state_vectors, config['y'], config['adaptation_percentage'],
-                                                              config['filename'] + '{0}.gri'.format(i + 1))
+        state_vectors, mesh = meshref.adapt_mesh(state_vectors, mesh['E'], mesh['V'], mesh['IE'], mesh['BE'], config['adaptation_percentage'],
+                           config['y'], config['filename'] + '{0}.gri'.format(i + 1))
 
         # Plot according to the data plotting of the simulation configuration
         plotting.plot_config(mesh, state_vectors, residuals, coefficients, config, i+1)

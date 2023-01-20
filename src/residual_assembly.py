@@ -6,7 +6,7 @@ from numba import njit
 from numba.typed import List
 
 
-@njit(cache=True)
+# @njit(cache=True)
 def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, s_len, s_e_tol, asc_check):
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.

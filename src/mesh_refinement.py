@@ -337,6 +337,9 @@ def find_flagged_edges(state, E, V, IE, BE, f, y):
         error[i, :] = np.array((np.abs(mach[IE[i, 2]] - mach[IE[i, 3]]) * l, IE[i, 2], IE[i, 3]))
 
     for i in range(BE.shape[0]):
+        # Skip over the boundary edges that are supersonic inflows/outflows - don't need to refine them
+        if BE[i, 3] == 2 or BE[i, 3] == 3: error[IE.shape[0] + i, :] = np.array((0, BE[i, 2], -1)); continue
+        # For all other boundary edges, calculated the error based on the Mach number normal to the local BE
         l, n = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
 
         u = state[BE[i, 2], 1] / state[BE[i, 2], 0]
@@ -426,8 +429,8 @@ def split_cell(state, E, V, E2e):
                 if E2e[i, j] != 0:
                     # Perform the cell splitting
                     midpoint = (V[E[i][j]] + V[E[i][j - 2]]) / 2
-
-                    V = np.vstack((V, np.reshape(midpoint, (1, 2))))
+                    # Check to see if the midpoints are already in the node matrix - if not, add them
+                    if (np.sum(V - midpoint, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint, (1, 2))))
 
                     midpointi = np.argmin(np.sum(np.abs(V - midpoint), axis=1))
 
@@ -442,8 +445,9 @@ def split_cell(state, E, V, E2e):
                 if E2e[i, j] == 0:
                     midpoint1 = (V[E[i][j - 2]] + V[E[i][j - 1]]) / 2
                     midpoint2 = (V[E[i][j - 1]] + V[E[i][j]]) / 2
-                    temp_midpoints = np.vstack((midpoint1, midpoint2))
-                    V = np.vstack((V, np.reshape(temp_midpoints, (2, 2))))
+                    # Check to see if the midpoints are already in the node matrix - if not, add them
+                    if (np.sum(V - midpoint1, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint1, (1, 2))))
+                    if (np.sum(V - midpoint2, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint2, (1, 2))))
 
                     midpoint1i = np.argmin(np.sum(np.abs(V - midpoint1), axis=1))
                     midpoint2i = np.argmin(np.sum(np.abs(V - midpoint2), axis=1))
@@ -477,8 +481,10 @@ def split_cell(state, E, V, E2e):
             midpoint1 = (V[E[i][0]] + V[E[i][1]]) / 2
             midpoint2 = (V[E[i][1]] + V[E[i][2]]) / 2
             midpoint3 = (V[E[i][2]] + V[E[i][0]]) / 2
-            temp_midpoints = np.vstack((midpoint1, midpoint2, midpoint3))
-            V = np.vstack((V, np.reshape(temp_midpoints, (3, 2))))
+            # Check to see if the midpoints are already in the node matrix - if not, add them
+            if (np.sum(V - midpoint1, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint1, (1, 2))))
+            if (np.sum(V - midpoint2, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint2, (1, 2))))
+            if (np.sum(V - midpoint3, axis=1)).min() != 0: V = np.vstack((V, np.reshape(midpoint3, (1, 2))))
 
             # Get the indices in V where the new midpoint nodes are placed
             midpoint1i = np.argmin(np.sum(np.abs(V - midpoint1), axis=1))
@@ -515,31 +521,49 @@ def split_boundaries(E, V, BE, E2e):
     :param E2e: Element-2-Edges for which edges need to be refined
     """
     new_BE = np.empty((0, 3), dtype=np.int32)
-    for i in range(BE.shape[0]):
-        be_split = True
-        for j in range(E2e[BE[i, 2]].shape[0]):
-            # Check to see if the edge is flagged
-            if E2e[BE[i, 2], j] != 0:
-                # Check to see if the flagged edge matches the BE
-                flagged_edge = np.array((E[i][j], E[i][j - 1]), dtype=np.int32)
-                flagged_edge_rev = np.array((E[i][j - 1], E[i][j]), dtype=np.int32)
 
-                if (BE[i, 0:2] - flagged_edge).sum() == 0 or (BE[i, 0:2] - flagged_edge_rev).sum() == 0:
-                    midpoint = (V[BE[i, 0]] + V[BE[i, 1]]) / 2
-                    midpointi = np.argmin(np.sum(np.abs(V - midpoint), axis=1))
+    for be in BE:
+        be_node_pair = be[0:2]
+        be_node_pair_flipped = np.flip(be_node_pair)
 
-                    new_BE_temp1 = np.array((BE[i, 0], midpointi, BE[i, 3]), dtype=np.int32)
-                    new_BE_temp2 = np.array((midpointi, BE[i, 1], BE[i, 3]), dtype=np.int32)
-                    new_BE_temp = np.vstack((new_BE_temp1, new_BE_temp2))
-                    new_BE = np.vstack((new_BE, np.reshape(new_BE_temp, (2, 3))))
-                    be_split = False
-        if be_split:
-            new_BE_temp = np.array((BE[i, 0], BE[i, 1], BE[i, 3]), dtype=np.int32)
+        # Check to see which edge the pair of nodes corresponds to on the BE's cell, then check to see if it was flagged
+        # for refinement, if it was then split the BE
+        if (np.sum(be_node_pair - E[be[2]][0:2]) == 0 and E2e[be[2], 0] != 0) or \
+        (np.sum(be_node_pair_flipped - E[be[2]][0:2]) == 0 and E2e[be[2], 0] != 0):
+            midpoint = (V[be[0]] + V[be[1]]) / 2
+            midpointi = np.argmin(np.sum(np.abs(V - midpoint), axis=1))
+            new_BE_temp1 = np.array((be[0], midpointi, be[3]), dtype=np.int32)
+            new_BE_temp2 = np.array((midpointi, be[1], be[3]), dtype=np.int32)
+            new_BE_temp = np.vstack((new_BE_temp1, new_BE_temp2))
+            new_BE = np.vstack((new_BE, np.reshape(new_BE_temp, (2, 3))))
+            continue
+
+        elif (np.sum(be_node_pair - E[be[2]][1::]) == 0 and E2e[be[2], 1] != 0) or \
+        (np.sum(be_node_pair_flipped - E[be[2]][1::]) == 0 and E2e[be[2], 1] != 0):
+            midpoint = (V[be[0]] + V[be[1]]) / 2
+            midpointi = np.argmin(np.sum(np.abs(V - midpoint), axis=1))
+            new_BE_temp1 = np.array((be[0], midpointi, be[3]), dtype=np.int32)
+            new_BE_temp2 = np.array((midpointi, be[1], be[3]), dtype=np.int32)
+            new_BE_temp = np.vstack((new_BE_temp1, new_BE_temp2))
+            new_BE = np.vstack((new_BE, np.reshape(new_BE_temp, (2, 3))))
+            continue
+
+        elif (np.sum(be_node_pair - np.flip(E[be[2]])[0::2]) == 0 and E2e[be[2], 2] != 0) or \
+        (np.sum(be_node_pair_flipped - np.flip(E[be[2]])[0::2]) == 0 and E2e[be[2], 2] != 0):
+            midpoint = (V[be[0]] + V[be[1]]) / 2
+            midpointi = np.argmin(np.sum(np.abs(V - midpoint), axis=1))
+            new_BE_temp1 = np.array((be[0], midpointi, be[3]), dtype=np.int32)
+            new_BE_temp2 = np.array((midpointi, be[1], be[3]), dtype=np.int32)
+            new_BE_temp = np.vstack((new_BE_temp1, new_BE_temp2))
+            new_BE = np.vstack((new_BE, np.reshape(new_BE_temp, (2, 3))))
+            continue
+        else:
+            new_BE_temp = np.array((be[0], be[1], be[3]), dtype=np.int32)
             new_BE = np.vstack((new_BE, np.reshape(new_BE_temp, (1, 3))))
 
     return new_BE
 
-@njit(cache=True)
+
 def write_new_mesh(E, V, new_BE, fname):
     """Writes the refined mesh to a *.gri file.
 
@@ -558,27 +582,19 @@ def write_new_mesh(E, V, new_BE, fname):
     for node in V:
         f.write('%.15e %.15e\n' % (node[0], node[1]))
 
-    # TODO: Reconfigure this BE writing to work with new_BE
-    # Boundary edge information
-    # f.write('{0}\n'.format(len(mesh['Bname'])))
-    #
-    # boundary_pairs = [[] for name in mesh['Bname']]
-    #
-    # # Boundary pairs writing
-    # for be in mesh['BE']:
-    #     if np.any(np.equal(be, flag_be).all(1)) or np.any(np.equal(be, flag_ie).all(1)):
-    #         midpoint = (mesh['V'][be[0]] + mesh['V'][be[1]]) / 2
-    #         midpoint_index = np.where(np.equal(midpoint, mesh['V']).all(1))[0][0]
-    #         if not [be[0], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append(
-    #             [be[0], midpoint_index])
-    #         if not [be[1], midpoint_index] in boundary_pairs[be[3]]: boundary_pairs[be[3]].append(
-    #             [be[1], midpoint_index])
-    #         continue
-    #     boundary_pairs[be[3]].append([be[0], be[1]])
-    # for i in range(len(mesh['Bname'])):
-    #     f.write('{0} 2 {1}\n'.format(len(boundary_pairs[i]), mesh['Bname'][i]))
-    #     for pair in boundary_pairs[i]:
-    #         f.write('{0} {1}\n'.format(pair[0] + 1, pair[1] + 1))
+    # Boundary Edge pair writing
+    num_unique_bes = np.unique(new_BE[:, 2])
+    f.write('%i\n' % (num_unique_bes.shape[0]))
+    for i in range(num_unique_bes.shape[0]):
+        be_slice = new_BE[new_BE[:, 2] == i, 0:2]
+        if i == 0: type_be = 'Wall'
+        if i == 1: type_be = 'Exit'
+        if i == 2: type_be = 'Outflow'
+        if i == 3: type_be = 'Inflow'
+
+        f.write('%i %i %s\n' % (be_slice.shape[0], 2, type_be))
+        for row in be_slice:
+            f.write('%i %i\n' % (row[0] + 1, row[1] + 1))
 
     # Element writing
     f.write('{0} 1 TriLagrange\n'.format(E.shape[0]))
@@ -588,7 +604,6 @@ def write_new_mesh(E, V, new_BE, fname):
     f.close()
 
 
-# @njit(cache=True)
 def adapt_mesh(state, E, V, IE, BE, f, y, fname):
     """Adapts the mesh using the error between cell states which is described as jumps in Mach number.
 
@@ -604,6 +619,7 @@ def adapt_mesh(state, E, V, IE, BE, f, y, fname):
     hashed_refinement_matrix = find_flagged_edges(state, E, V, IE, BE, f, y)
     new_state, new_E, new_V = split_cell(state, E, V, hashed_refinement_matrix)
     new_boundaries = split_boundaries(E, new_V, BE, hashed_refinement_matrix)
-    return
-    # write_new_mesh(new_E, new_V, new_boundaries, fname)
+    write_new_mesh(new_E, new_V, new_boundaries, fname)
+    mesh = readgri.readgri(fname)
+    return new_state, mesh
 
