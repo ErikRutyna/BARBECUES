@@ -1,3 +1,5 @@
+import os
+
 import moc_preproc as mpp
 import readgri
 import mesh_refinement as meshref
@@ -30,16 +32,11 @@ def main():
     # Grid Loading
     mesh = readgri.readgri(config['mesh_path'])
 
-    # TODO: Solution initialization driver function
-    # Solution Initialization
-    # state_vectors = intlzn.initialize_boundary_dist(mesh['E'], mesh['V'],
-    #                                                 config['freestream_mach_numer'],
-    #                                                 config['angle_of_attack'],
-    #                                                 config['y'])
-    state_vectors = intlzn.initialize_boundary_weak(mesh['E'].shape[0],
-                                                      config['freestream_mach_numer'],
-                                                      config['angle_of_attack'],
-                                                      config['y'])
+    # Initialization
+    state_vectors = intlzn.init_state(mesh, config)
+
+    # Move to the output directory
+    os.chdir(os.path.join(os.getcwd(), '../Output/'))
 
     # Pre-solution visualization
     plotting.plot_config(mesh, state_vectors, residuals, coefficients, config, -1)

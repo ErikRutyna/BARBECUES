@@ -3,3 +3,4 @@ Meshes/*
 git_commands.txt
 src/__pycache__
 src/config.json
+Output/*
