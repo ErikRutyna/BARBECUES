@@ -35,7 +35,8 @@ def main():
     # Initialization
     state_vectors = intlzn.init_state(mesh, config)
 
-    # Move to the output directory
+    # Make the output directory if it doesn't exist - then change to it for output files
+    if not os.path.isdir(os.path.join(os.getcwd(), '../Output/')): os.mkdir(os.path.join(os.getcwd(), '../Output/'))
     os.chdir(os.path.join(os.getcwd(), '../Output/'))
 
     # Pre-solution visualization

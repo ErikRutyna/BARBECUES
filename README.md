@@ -1,4 +1,4 @@
-# B.A.R.B.E.C.U.E.S. V1.2.6
+# B.A.R.B.E.C.U.E.S. V1.2.7
 B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the compressible Euler equations. The code is meant to be a testing ground for novel ideas and features in an effort to push the limits of traditional CFD codes by doing standard processes (i.e. initialization or convergence) in non-standard ways. More information about such features can be found in the Wiki (WIP).
 
 
@@ -38,6 +38,8 @@ There are two options for convergence: Smart and Standard. Smart convergence det
 | Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3 |
 
 # Changelog
+V1.2.7 Added additional initialization method ("exp") that uses expoential scaling for scaling initial freestream state at each cell. In some cases this is more optimal (less iterations til converged) than other methods. Configured simulation to generate an "Output" directory that contains all output files. Also clarified plotting labels and fixed small error regarding output file where the Lift and Drag coefficient values were swapped.
+
 V1.2.6 Original AMR algorithm (mesh_refinement.refine_interp_uniform()) works, also newer and better refinement algorithm (mesh_refinement.adapt_mesh()) that is fully Numba compatible, so it is both faster and produces better quality meshes.
 
 V1.2.5 Numba JIT integration for continued speed increases. AMR & MOC-based initialization are temporarily broken until it has been updated to work with Numba JIT.
