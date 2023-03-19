@@ -35,7 +35,7 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     coefficients = np.zeros((0, 4))
     # Asymptotic Convergence Criteria for Smart Convergence
     ascs = np.empty((0, 4))
-    # TODO: Investigate dynamic CFL numbers
+    # TODO: Investigate dynamic CFL numbers, HoM (gradient-based), and HoI schemes (RK2, RK4)
     cfl = 1
 
     be_l, be_n = np.zeros((BE.shape[0])), np.zeros((BE.shape[0], 2))

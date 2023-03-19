@@ -4,7 +4,7 @@
         "mesh_path": "../Meshes/mesh0.gri",
         "restart_files": false,
 
-          "adaptive_cycles": 0,
+          "adaptive_cycles": 5,
           "adaptation_percentage": 0.05,
 
           "flux_method": 1
@@ -26,7 +26,7 @@
 
     "initialization": [
         {
-            "init": "exp"
+            "init": "moc"
         }
     ],
 

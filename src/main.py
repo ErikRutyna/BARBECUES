@@ -1,6 +1,4 @@
 import os
-
-import moc_preproc as mpp
 import readgri
 import mesh_refinement as meshref
 import residual_assembly as ra
@@ -10,7 +8,7 @@ import timeit
 import initialization as intlzn
 import preprocess as pp
 import postprocess as pop
-
+import shutil
 
 # # Configuration for the CFD run
 # op_con = operating_conditions(30000)
@@ -38,6 +36,10 @@ def main():
     # Make the output directory if it doesn't exist - then change to it for output files
     if not os.path.isdir(os.path.join(os.getcwd(), '../Output/')): os.mkdir(os.path.join(os.getcwd(), '../Output/'))
     os.chdir(os.path.join(os.getcwd(), '../Output/'))
+    # Move the MoC plot file to this directory if it exists
+    if os.path.exists(os.path.join(os.path.dirname(os.getcwd()), 'src/moc_lines.png')):
+        shutil.move(os.path.join(os.path.dirname(os.getcwd()), 'src/moc_lines.png'),
+                    os.path.join(os.getcwd(), 'moc_lines.png'))
 
     # Pre-solution visualization
     plotting.plot_config(mesh, state_vectors, residuals, coefficients, config, -1)

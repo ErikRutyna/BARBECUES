@@ -1,4 +1,4 @@
-# B.A.R.B.E.C.U.E.S. V1.2.7
+# B.A.R.B.E.C.U.E.S. V1.2.8
 B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the compressible Euler equations. The code is meant to be a testing ground for novel ideas and features in an effort to push the limits of traditional CFD codes by doing standard processes (i.e. initialization or convergence) in non-standard ways. More information about such features can be found in the Wiki (WIP).
 
 
@@ -37,7 +37,21 @@ There are two options for convergence: Smart and Standard. Smart convergence det
 | Pitching Moment | 2 |
 | Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3 |
 
+
+## Initialization Methods
+There are 4 unique initialization methods and 1 sub-method for initializing the state variables in the cells of the domain.
+
+| Init Method | Effect |
+|--------------------|-------------|
+| freestream | All cells have freestream initial condition |
+| weak | The freestream Mach number is halved and then the freestream condition is applied |
+| linear/exp  | Uses a linear/exponential scaling to scale the freestream Mach number based on each cell's centroid coordinate location |
+| moc (@ (Supersonic) Exits) | Propogates characteristic lines from the inflow and reflects them off of the inviscid walls and uses aforementioned reflections in order to create zones for oblique shock trains which can scale Mach number down according to the location within the shock train |
+
+
 # Changelog
+V1.2.8 Fixed the Characteristic-line-like initialization method that initializes the intial state by running characteristic lines from the inflow to outflow and looking at possible location for oblique shock trains in the domain.
+
 V1.2.7 Added additional initialization method ("exp") that uses expoential scaling for scaling initial freestream state at each cell. In some cases this is more optimal (less iterations til converged) than other methods. Configured simulation to generate an "Output" directory that contains all output files. Also clarified plotting labels and fixed small error regarding output file where the Lift and Drag coefficient values were swapped.
 
 V1.2.6 Original AMR algorithm (mesh_refinement.refine_interp_uniform()) works, also newer and better refinement algorithm (mesh_refinement.adapt_mesh()) that is fully Numba compatible, so it is both faster and produces better quality meshes.

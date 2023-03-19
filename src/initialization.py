@@ -1,4 +1,5 @@
 import cell_geometry_formulas as cfg
+import initialization_moc as imoc
 from numba import njit
 import numpy as np
 import math
@@ -163,5 +164,8 @@ def init_state(mesh, config):
                                                                       config['freestream_mach_numer'],
                                                                       config['angle_of_attack'],
                                                                       config['y'])
-    if config['init'] == 'moc': pass
+    if config['init'] == 'moc': state = imoc.initialize_moc(mesh['E'], mesh['V'], mesh['BE'],
+                                                                      config['freestream_mach_numer'],
+                                                                      config['angle_of_attack'],
+                                                                      config['y'])
     return state

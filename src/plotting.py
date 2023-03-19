@@ -147,7 +147,7 @@ def plot_grid(nodes, fname):
     plt.close(f)
 
 
-def plot_moc(mesh, moc, fname):
+def plot_moc(E, V, BE, moc, fname):
     """Plots the characteristic lines as they reflect off of the walls in the domain when a MOC initialization is
     performed.
 
@@ -155,17 +155,18 @@ def plot_moc(mesh, moc, fname):
     :param moc: List of characteristic lines and their reflection points
     :param fname: Filename for what the figure is saved under
     """
-    V = mesh['V']; BE = mesh['BE']
     f = plt.figure(figsize=(12,12))
+    # Plots all the triangles in the mesh in black
+    # plt.triplot(V[:,0], V[:,1], E, '-', color='black')
     # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
-        if mesh['Bname'][BE[i, 3]] == 'Wall':
+        if BE[i, 3] == 0:
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='magenta')
-        elif mesh['Bname'][BE[i, 3]] == 'Inflow':
+        elif BE[i, 3] == 3:
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='red')
-        elif mesh['Bname'][BE[i, 3]] == 'Outflow':
+        elif BE[i, 3] == 2:
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='blue')
-        elif mesh['Bname'][BE[i, 3]] == 'Exit':
+        elif BE[i, 3] == 1:
             plt.plot(V[BE[i, 0:2], 0], V[BE[i, 0:2], 1], '-', linewidth=2, color='cyan')
 
     for i in range(len(moc)):

@@ -196,6 +196,7 @@ def obliqueshock(theta, M1, p1, T1, r1, gamma):
     result['Mn1'] = Mn1
     result['Mn2'] = Mn2
 
+    result['M1'] = M1
     result['M2'] = M2
 
     result['p01'] = p01
