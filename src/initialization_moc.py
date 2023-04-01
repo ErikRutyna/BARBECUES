@@ -33,7 +33,6 @@ def initialize_moc(E, V, BE, M, a, y):
     # Visualize the MoC lines with a plot showing them in green
     plotting.plot_moc(E, V, BE, moc_lines, 'moc_lines.png')
 
-    # TODO: Redo how zones are created and document that process - then plot the zones along with the MoC's
     # Trim off the starting points and ending points - these don't matter
     for i in range(len(moc_lines)):
         moc_lines[i] = np.delete(moc_lines[i], (0, -1), axis=0)

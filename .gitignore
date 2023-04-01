@@ -1,7 +1,9 @@
-Meshes/*
-.idea/*
-git_commands.txt
-src/__pycache__
-src/config.json
+Meshes/mesh0.gri
+
+
 Output/*
 PDFs/*
+
+src/__pycache__
+.idea/*
+git_commands.txt

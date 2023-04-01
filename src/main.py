@@ -10,15 +10,8 @@ import preprocess as pp
 import postprocess as pop
 import shutil
 
-# # Configuration for the CFD run
-# op_con = operating_conditions(30000)
 
-# # Checking Characteristic Lines
-# moc_lines = mpp.moc_inflow(mesh, op_con)
-# moc_lines = mpp.moc_reflect(mesh, op_con, moc_lines)
-# plotting.plot_moc(mesh, moc_lines, 'mesh_moc.png')
-# state_variables = mpp.initialize_moc(mesh)  # [rho, rho*u, rho*v, rho*E]
-
+# TODO: Comb over the entire code (yes all of it) and look for better documentation (comments) & styling.
 def main():
     # Setup configuration and tracking variables
     start_time = timeit.default_timer()

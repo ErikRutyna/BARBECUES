@@ -54,7 +54,6 @@ def edgehash2(E, B):
 
 
 # The following functions were written by Krzysztof J. Fidkowski @ University of Michigan
-
 #-----------------------------------------------------------
 # Identifies interior and boundary edges given element-to-node
 # IE contains (n1, n2, elem1, elem2) for each interior edge

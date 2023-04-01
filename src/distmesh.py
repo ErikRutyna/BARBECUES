@@ -1,426 +1,233 @@
 import copy
-
 import numpy as np
-import math
 from scipy import spatial as sp
 from scipy import sparse as spa
-import mesh_generation_helper as mgh
+from matplotlib.path import Path as linepath
+from numba import njit
 
-def shapes_distmesh(x, y, h, circle, square, rectangle, fixed_points):
+# TODO: Optimize the algorithm where it can be done in order to increase runtimes
+def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-3, dptol=1e-3):
     """Runs my version of DistMesh in 2D that is implemented for the generic shapes domain. Code is meant to be similar
     in architecture/algorithm to actual DistMesh for debugging and usability purposes. Only difference is that each
     DistMesh function has its own created distance function as I don't know how to do MATLAB style inline functions in
     Python. We also make a small change to the code provided online in that this code always assumes a uniform
     distribution of cells - no local area refinement as the solver as AMR.
 
-    :return:
+    :param anon_sdf: Anonymous SDF function - but in Python this is a lambda function (anon_sdf = lambda p: dpoly(...)
+    :param h: Desired edge length in unitless length
+    :param bound_box: Bounding box of domain (edges of the computational domain) [xmin, xmax, ymin, ymax]
+    :param fixed_points: Fixed points of domain that are to not be moved
+    :param k: Bar stiffness coefficient, defaults to 0.2
+    :param Fscale: Scaling factor for bar length force adjustments, defaults to 1.5
+    :param dptol: Re-triangulation update tolerance, defaults to 1e-3
+    :param ttol: RMS of bar forces residual, must be less than this to exit mesh generation, defaults to 1e-3
+
+    :return: V, T (Vertices [N, 2] x-y coordinate pairs, and triangles [N, 3] of V indices)
     """
-    N = np.ceil(math.sqrt(x / h))
-    # The set of tolerances/scaling factors
-    dptol = 1e-3
-    ttol = 1e-1
-    Fscale = 1.2
-    deltat = 0.2
+    # Termination/Control numbers
     geps = 1e-3 * h
     deps = np.sqrt(np.spacing(1)) * h
 
-    # Part 1 - Initial point distribution & shifting of every other row to make nice triangles
-    x_nodes, y_nodes = np.meshgrid(np.arange(-x/2, x/2, h), np.arange(-y/2, y/2, math.sqrt(3)/2*h))
-    x_nodes[1::2, :] += h/2
-    nodes = np.stack((x_nodes.flatten(), y_nodes.flatten()), axis=1)
+    # Bounding box information
+    xmin, xmax, ymin, ymax = bound_box
 
-    # Part 2 - Remvoing points outside the region via the custom distance function
-    nodes = np.vstack((fixed_points, nodes[np.squeeze(shapes_distance(x, y, circle, square, rectangle, nodes)< geps), :]))
+    # Part 1. - Creating initial point distribution using equilateral triangles
+    x, y = np.mgrid[(xmin):(xmax+h):h, (ymin+h):(ymax+h*np.sqrt(3)/2):(h*np.sqrt(3)/2)]
 
-    old_nodes = np.Inf
-    # The loop that runs the bulk of the Delaunay Triangulation - Adjustment - Re-triangulation process
+    # Shift every other row to help with point distribution
+    x[:, 1::2] += h/2
+
+    # Create [N, 2] arrays of points
+    V = np.vstack((x.flat, y.flat)).T
+
+    # Part 2. - Removing out of bounds points and adding in the fixed points
+    V = V[anon_sdf(V) < geps]
+
+    # Removed the fixed points if they're in V
+    V = setdiff_rows(V, fixed_points)
+
+    # Add the fixed points back into V
+    V = np.vstack((fixed_points, V))
+
+    # Also count number of fixed points we have - need to know index to avoid moving the fixed points later on
+    n_fixed = fixed_points.shape[0]
+
+    # Part 3. - Triangulation via Delaunay and spring-force projection
+    oldV = np.Inf
+    counter = 0
     while True:
-        # Part 3 - Delaunay Triangulation via built in functionalities
-        ttol_tracker = max(np.sqrt(np.sum(np.power(nodes - old_nodes, 2), axis=1)) / h)
-        ttol_tracker =  (np.sqrt((np.power(nodes - old_nodes, 2)).sum(1)) / h ).max()
-        if ttol_tracker > ttol:
-            old_nodes = copy.deepcopy(nodes)
-            triangles = (sp.Delaunay(nodes)).simplices
+        counter += 1
+        dist = lambda Vnew, Vold: np.sqrt(((Vnew - Vold)**2).sum(1))
+        # Check for "large" movement by checking relative change of nodes from one cycle to next
+        if (dist(V, oldV)/h).max() > dptol:
+            oldV = copy.deepcopy(V)
+            # Compute our new triangles
+            T = (sp.Delaunay(V)).simplices
 
-            centroids = (nodes[triangles[:, 0], :] + nodes[triangles[:, 0], :] + nodes[triangles[:, 2], :])/3
+            # Reject triangles that have centroids outside of the domain
+            Tmid = V[T].sum(1) / 3
+            T = T[anon_sdf(Tmid) < - geps]
 
-            # Reject triangles with centroids outside the domain
-            triangles = triangles[np.squeeze(shapes_distance(x, y, circle, square, rectangle, centroids) < -geps)]
-
-            # Part 4 - Describing edges as a pair of nodes
-            edges = np.vstack((triangles[:, 0:2], triangles[:, 1::], triangles[:, 0::2]))
+            # Part 4. - Create edges of each triangle, make them unique, and then sort them
+            edges = np.vstack((T[:, 0:2], T[:, 1::], T[:, 0::2]))
             edges = np.unique(np.squeeze(edges).reshape(-1, np.squeeze(edges).shape[-1]), axis=0)
             edges.sort(axis=1)
-            # Fixing the edges to account for duplicates (i.e. [1, 2] == [2, 1])
+            # Further cleaning to remove duplicates where [1, 2] == [2, 1]
             cleaned_edges = np.empty((0, 2), dtype=int)
             for edge in edges:
                 rev_edge = np.array([edge[1], edge[0]])
                 if np.any(np.logical_and(np.equal(cleaned_edges[:, 0], edge[0]), np.equal(cleaned_edges[:, 1], edge[1])))\
                 or np.any(np.logical_and(np.equal(cleaned_edges[:, 0], rev_edge[0]), np.equal(cleaned_edges[:, 1], rev_edge[1]))): continue
                 cleaned_edges = np.vstack((cleaned_edges, edge))
+        # Part 5. - Move the mesh points based on their bar lengths and forces
+        # Current edge information
+        edge_vec = V[cleaned_edges[:, 0], :] - V[cleaned_edges[:, 1], :]
+        edge_L = np.sqrt(np.sum(edge_vec ** 2, axis=1))
 
-        # Part "5" - Plotting/saving the current mesh for viewing purposes
-        #TODO: Setup plotting for the mesh at each iteration of the algorithm
+        # Desired length for each triangle
+        edge_L_W = np.ones((cleaned_edges.shape[0])) * Fscale * \
+                   np.sqrt(np.sum(np.power(edge_L, 2)) / cleaned_edges.shape[0])
 
-        # Part 6 - Moving meshing points based on lengths and forces "F"
-        edge_vectors = nodes[cleaned_edges[:, 0], :] - nodes[cleaned_edges[:, 1], :]
-        edge_lengths = np.sqrt(np.sum(edge_vectors ** 2, axis=1))
-        # Uniform distribution - scaling by number of edges
-        edge_lengths_wanted = np.ones((cleaned_edges.shape[0])) * Fscale * \
-                              np.sqrt(np.sum(np.power(edge_lengths, 2)) / cleaned_edges.shape[0])
-        F = np.stack((edge_lengths_wanted - edge_lengths, np.zeros((edge_lengths.shape[0]))), axis=1).max(axis=1)
-
-        F_vectorized = (F[:, None]/edge_lengths[:, None]).dot([[1, 1]]) * edge_vectors
-        # F_vectorized = np.multiply(np.stack((F_vectorized, F_vectorized), axis=1), edge_vectors)
-        # F_vectorized = np.multiply(np.multiply(np.stack((np.divide(F, edge_lengths), np.divide(F, edge_lengths)), axis=1), np.ones((F.shape[0], 2))), edge_vectors)
+        # Force to move each edge
+        F = edge_L_W - edge_L
+        F[F < 0] = 0
+        F_vectorized = (F[:, None] / edge_L[:, None]).dot([[1, 1]]) * edge_vec
 
         I = cleaned_edges[:, [0, 0, 1, 1]].flatten()
         J = np.repeat([[0, 1, 0, 1]], cleaned_edges.shape[0], axis=0).flatten()
         S = np.stack((F_vectorized, -F_vectorized), axis=1).flatten()
+        Ftot = dense(I, J, S, shape=(V.shape[0], 2))
+        # Account for the fixed nodes that don't have forces applied
+        Ftot[0:n_fixed] = 0
 
-        Ftot = dense(I, J, S, shape=(nodes.shape[0], 2))
-        Ftot[0:fixed_points.shape[0]+1, :] = 0
-        nodes += deltat * Ftot
+        # Move the nodes by a scaled version of the force
+        V += k * Ftot
 
-        # Part 7 - Moving exterior points towards the interior
-        d = unit_circle_distance(nodes)
-        i_out = d > 0
+        # Part 6. - Projecting points outside the boundary to the boundary/inside
+        p = anon_sdf(V)
+        if (p>0).any():
+            gradx = (anon_sdf(V[p>1e-6]+[deps, 0]) - p[p>1e-6]) / deps
+            grady = (anon_sdf(V[p>1e-6]+[0, deps]) - p[p>1e-6]) / deps
+            grad_tot = gradx ** 2 + grady ** 2
+            V[p>1e-6] -= (p[p>1e-6] * np.vstack((gradx, grady))/grad_tot).T
 
-        x_grad_nodes = nodes[i_out] + [deps, 0]
-        y_grad_nodes = nodes[i_out] + [0, deps]
-        gradient_x = (unit_circle_distance(x_grad_nodes) - d[i_out]) / deps
-        gradient_y = (unit_circle_distance(y_grad_nodes) - d[i_out]) / deps
-        gradient_mag = gradient_x ** 2 + gradient_y ** 2
-
-        nodes[i_out] -= (d[i_out]*np.vstack((gradient_x, gradient_y))/gradient_mag).T
-
-        # Part 8 - Termination: All interior points move less than dptol then we've made a good quality mesh
-        tracker = (np.sqrt((deltat*Ftot[d<-geps]**2).sum(1))/h).max()
-        if tracker < dptol:
+        # Part 7. - Termination condition: All nodes that had to be moved didn't move that much
+        # TODO: Plot this residual as a function of iteration # and have title show inputs/nodes #/cells #
+        # TODO: Add the counter/residual amount as an exit condition
+        if counter > 50:
+        # if (np.sqrt((k * Ftot[p<-geps]**2).sum(1))/h).max() < ttol:
             break
-    return nodes, triangles
+    print('Number of iterations to make a good mesh: {0}'.format(counter))
+    return V, T
 
 
-def unit_circle_distmesh(x, y, h, circle, square, rectangle, fixed_points):
-    """Runs my version of DistMesh in 2D that is implemented for the generic shapes domain. Code is meant to be similar
-    in architecture/algorithm to actual DistMesh for debugging and usability purposes. Only difference is that each
-    DistMesh function has its own created distance function as I don't know how to do MATLAB style inline functions in
-    Python. We also make a small change to the code provided online in that this code always assumes a uniform
-    distribution of cells - no local area refinement as the solver as AMR.
+@njit(cache=True)
+def sdf_segment(a, b, p):
+    """Signed distance function for a line segments made up of points [a, b]. It computes the distances
 
-    :return:
+    :param a: Starting position of each line segment, [x, y]
+    :param b: Ending position of each line segment, [x, y]
+    :param p: All points in the domain [N, 2], x-y coordinate pair array
     """
-    N = np.ceil(math.sqrt(x / h))
-    # The set of tolerances/scaling factors
-    dptol = 1e-3
-    ttol = 1e-1
-    Fscale = 1.2
-    deltat = 0.2
-    geps = 1e-3 * h
-    deps = np.sqrt(np.spacing(1)) * h
-
-    # Part 1 - Initial point distribution & shifting of every other row to make nice triangles
-    x_nodes, y_nodes = np.meshgrid(np.arange(-x/2, x/2, h), np.arange(-y/2, y/2, math.sqrt(3)/2*h))
-    x_nodes[1::2, :] += h/2
-    nodes = np.stack((x_nodes.flatten(), y_nodes.flatten()), axis=1)
-
-    # Part 2 - Remvoing points outside the region via the custom distance function
-    nodes = np.vstack((nodes[unit_circle_distance(nodes) < geps, :]))
-
-    old_nodes = np.Inf
-    # The loop that runs the bulk of the Delaunay Triangulation - Adjustment - Re-triangulation process
-    while True:
-        # Part 3 - Delaunay Triangulation via built in functionalities
-        ttol_tracker = max(np.sqrt(np.sum(np.power(nodes - old_nodes, 2), axis=1)) / h)
-        ttol_tracker =  (np.sqrt((np.power(nodes - old_nodes, 2)).sum(1)) / h ).max()
-        if ttol_tracker > ttol:
-            old_nodes = copy.deepcopy(nodes)
-            triangles = (sp.Delaunay(nodes)).simplices
-
-            centroids = (nodes[triangles[:, 0], :] + nodes[triangles[:, 0], :] + nodes[triangles[:, 2], :])/3
-
-            # Reject triangles with centroids outside the domain
-            triangles = triangles[unit_circle_distance(centroids) < -geps, :]
-
-            # Part 4 - Describing edges as a pair of nodes
-            edges = np.vstack((triangles[:, 0:2], triangles[:, 1::], triangles[:, 0::2]))
-            edges = np.unique(np.squeeze(edges).reshape(-1, np.squeeze(edges).shape[-1]), axis=0)
-            edges.sort(axis=1)
-            # Fixing the edges to account for duplicates (i.e. [1, 2] == [2, 1])
-            cleaned_edges = np.empty((0, 2), dtype=int)
-            for edge in edges:
-                rev_edge = np.array([edge[1], edge[0]])
-                if np.any(np.logical_and(np.equal(cleaned_edges[:, 0], edge[0]), np.equal(cleaned_edges[:, 1], edge[1])))\
-                or np.any(np.logical_and(np.equal(cleaned_edges[:, 0], rev_edge[0]), np.equal(cleaned_edges[:, 1], rev_edge[1]))): continue
-                cleaned_edges = np.vstack((cleaned_edges, edge))
-
-
-        # Part "5" - Plotting/saving the current mesh for viewing purposes
-        #TODO: Setup plotting for the mesh at each iteration of the algorithm
-
-        # Part 6 - Moving meshing points based on lengths and forces "F"
-        edge_vectors = nodes[cleaned_edges[:, 0], :] - nodes[cleaned_edges[:, 1], :]
-        edge_lengths = np.sqrt(np.sum(edge_vectors ** 2, axis=1))
-        # Uniform distribution - scaling by number of edges
-        edge_lengths_wanted = np.ones((cleaned_edges.shape[0])) * Fscale * \
-                              np.sqrt(np.sum(np.power(edge_lengths, 2)) / cleaned_edges.shape[0])
-        F = np.stack((edge_lengths_wanted - edge_lengths, np.zeros((edge_lengths.shape[0]))), axis=1).max(axis=1)
-
-        F_vectorized = (F[:, None]/edge_lengths[:, None]).dot([[1, 1]]) * edge_vectors
-        # F_vectorized = np.multiply(np.stack((F_vectorized, F_vectorized), axis=1), edge_vectors)
-        # F_vectorized = np.multiply(np.multiply(np.stack((np.divide(F, edge_lengths), np.divide(F, edge_lengths)), axis=1), np.ones((F.shape[0], 2))), edge_vectors)
-
-        I = cleaned_edges[:, [0, 0, 1, 1]].flatten()
-        J = np.repeat([[0, 1, 0, 1]], cleaned_edges.shape[0], axis=0).flatten()
-        S = np.stack((F_vectorized, -F_vectorized), axis=1).flatten()
-
-        Ftot = dense(I, J, S, shape=(nodes.shape[0], 2))
-        # Ftot[0:fixed_points.shape[0]+1, :] = 0
-        nodes += deltat * Ftot
-
-        # Part 7 - Moving exterior points towards the interior
-        d = unit_circle_distance(nodes)
-        i_out = d > 0
-
-        x_grad_nodes = nodes[i_out] + [deps, 0]
-        y_grad_nodes = nodes[i_out] + [0, deps]
-        gradient_x = (unit_circle_distance(x_grad_nodes) - d[i_out]) / deps
-        gradient_y = (unit_circle_distance(y_grad_nodes) - d[i_out]) / deps
-        gradient_mag = gradient_x ** 2 + gradient_y ** 2
-
-        nodes[i_out] -= (d[i_out]*np.vstack((gradient_x, gradient_y))/gradient_mag).T
-
-        # Part 8 - Termination: All interior points move less than dptol then we've made a good quality mesh
-        tracker = (np.sqrt((deltat*Ftot[d<-geps]**2).sum(1))/h).max()
-        if tracker < dptol:
-            break
-    return nodes, triangles
-
-
-def flat_plate_distmesh_shape(x, y, h, fixed_points, l , w):
-    """Like unit circle distmesh algorithm, but for a flat plate with sharp edges."""
-
-    # Part 0 - tolerances and variance parameters
-    dptol = 1e-3
-    ttol = 1e-1
-    Fscale = 1.2
-    deltat = 0.2
-    geps = 1e-3 * h
-    deps = np.sqrt(np.spacing(1)) * h
-
-    # Part 1 - Initial point distribution & shifting of every other row to make nice triangles
-    x_nodes, y_nodes = np.meshgrid(np.arange(-x/2, x/2, h), np.arange(-y/2, y/2, math.sqrt(3)/2*h))
-    x_nodes[1::2, :] += h/2
-    nodes = np.stack((x_nodes.flatten(), y_nodes.flatten()), axis=1)
-
-    # Part 2 - Remvoing points outside the region via the custom distance function
-    nodes = np.vstack((fixed_points, nodes[rectangle_distance(nodes, l, w) < geps, :]))
-
-    old_nodes = np.Inf
-    # The loop that runs the bulk of the Delaunay Triangulation - Adjustment - Re-triangulation process
-    while True:
-        # Part 3 - Delaunay Triangulation via built in functionalities
-        ttol_tracker = (np.sqrt((np.power(nodes - old_nodes, 2)).sum(1)) / h).max()
-        if ttol_tracker > ttol:
-            old_nodes = copy.deepcopy(nodes)
-            triangles = (sp.Delaunay(nodes)).simplices
-
-            centroids = (nodes[triangles[:, 0], :] + nodes[triangles[:, 0], :] + nodes[triangles[:, 2], :]) / 3
-
-            # Reject triangles with centroids outside the domain
-            triangles = triangles[rectangle_distance(centroids, l, w) < 0, :]
-
-            # Part 4 - Describing edges as a pair of nodes
-            edges = np.vstack((triangles[:, 0:2], triangles[:, 1::], triangles[:, 0::2]))
-            edges = np.unique(np.squeeze(edges).reshape(-1, np.squeeze(edges).shape[-1]), axis=0)
-            edges.sort(axis=1)
-            # Fixing the edges to account for duplicates (i.e. [1, 2] == [2, 1])
-            cleaned_edges = np.empty((0, 2), dtype=int)
-            for edge in edges:
-                rev_edge = np.array([edge[1], edge[0]])
-                if np.any(
-                        np.logical_and(np.equal(cleaned_edges[:, 0], edge[0]), np.equal(cleaned_edges[:, 1], edge[1]))) \
-                        or np.any(np.logical_and(np.equal(cleaned_edges[:, 0], rev_edge[0]),
-                                                 np.equal(cleaned_edges[:, 1], rev_edge[1]))): continue
-                cleaned_edges = np.vstack((cleaned_edges, edge))
-
-        # Part "5" - Plotting/saving the current mesh for viewing purposes
-        # TODO: Setup plotting for the mesh at each iteration of the algorithm
-
-        # Part 6 - Moving meshing points based on lengths and forces "F"
-        edge_vectors = nodes[cleaned_edges[:, 0], :] - nodes[cleaned_edges[:, 1], :]
-        edge_lengths = np.sqrt(np.sum(edge_vectors ** 2, axis=1))
-        # Uniform distribution - scaling by number of edges
-        edge_lengths_wanted = np.ones((cleaned_edges.shape[0])) * Fscale * \
-                              np.sqrt(np.sum(np.power(edge_lengths, 2)) / cleaned_edges.shape[0])
-        F = np.stack((edge_lengths_wanted - edge_lengths, np.zeros((edge_lengths.shape[0]))), axis=1).max(axis=1)
-
-        F_vectorized = (F[:, None] / edge_lengths[:, None]).dot([[1, 1]]) * edge_vectors
-        # F_vectorized = np.multiply(np.stack((F_vectorized, F_vectorized), axis=1), edge_vectors)
-        # F_vectorized = np.multiply(np.multiply(np.stack((np.divide(F, edge_lengths), np.divide(F, edge_lengths)), axis=1), np.ones((F.shape[0], 2))), edge_vectors)
-
-        I = cleaned_edges[:, [0, 0, 1, 1]].flatten()
-        J = np.repeat([[0, 1, 0, 1]], cleaned_edges.shape[0], axis=0).flatten()
-        S = np.stack((F_vectorized, -F_vectorized), axis=1).flatten()
-
-        Ftot = dense(I, J, S, shape=(nodes.shape[0], 2))
-        Ftot[0:fixed_points.shape[0]+1, :] = 0
-        nodes += deltat * Ftot
-
-        # Part 7 - Moving exterior points towards the interior
-        d = rectangle_distance(nodes, l, w)
-        i_out = d > 0
-
-        x_grad_nodes = nodes[i_out] + [deps, 0]
-        y_grad_nodes = nodes[i_out] + [0, deps]
-        gradient_x = (rectangle_distance(x_grad_nodes, l, w) - d[i_out]) / deps
-        gradient_y = (rectangle_distance(y_grad_nodes, l, w) - d[i_out]) / deps
-        gradient_mag = gradient_x ** 2 + gradient_y ** 2
-
-        nodes[i_out] -= (d[i_out] * np.vstack((gradient_x, gradient_y)) / gradient_mag).T
-
-        # Part 8 - Termination: All interior points move less than dptol then we've made a good quality mesh
-        tracker = (np.sqrt((deltat * Ftot[d < -geps] ** 2).sum(1)) / h).max()
-        if tracker < dptol:
-            break
-    return nodes, triangles
-
-def rectangle_distance(nodes, l, w):
-    distance = np.zeros((nodes.shape[0]))
-    for i in range(nodes.shape[0]):
-        distance[i] = min([l - nodes[i, 0], nodes[i, 0] - l, w - nodes[i, 1], nodes[i, 1] - w])
-        if -l/2 < nodes[i, 0] < l/2 and -w/2 < nodes[i, 1] < w/2: distance[i] = abs(distance[i])
-    return distance
-
-def unit_circle_distance(nodes):
-    distance = np.zeros((nodes.shape[0]))
-    for i in range(nodes.shape[0]):
-        distance[i] = np.linalg.norm(nodes[i]) - 1
-    return distance
-
-def shapes_distance(x, y, circle, square, rectangle, p):
-    """This is a "distance" function that returns -1/0/1 for a given point p if the point p is inside/on edge of/outside
-    the given domain configuration for the basic shape combination.
-
-    :param x: Size of domain in x-dir x E [-x/2, x/2]
-    :param y: Size of domain in y-dir x E [-y/2, y/2]
-    :param circle: [x0, y0, r]
-    :param square: [x0, y0, l]
-    :param rectangle: [x0, y0, l, w]
-    :param p: Nx2 array of points p
-    :return:
-    """
-    dist = np.zeros((p.shape[0], 1))
-
+    sdf_min = np.zeros(p.shape[0])
+    # Now for every line segment and every point in the domain, compute the signed distance function
     for i in range(p.shape[0]):
-        # Check if the point is outside the domain w/ following if-tree
-
-        # Check x-pos
-        if -x/2 > p[i, 0] or p[i, 0] > x/2:
-            x_dis = abs(p[i, 0]) - x/2
-            # If the y-position is also not inside, find distance
-            if -y/2 > p[i, 1] or p[i, 1] > y/2:
-                y_dis = abs(p[i, 1]) - y/2
-                dist[i] = np.linalg.norm([x_dis, y_dis])
-            # If y-position is inside, the closest distance is x-distance
-            else:
-                dist[i] = x_dis
-
-        # Check y-pos
-        if -y/2 > p[i, 1] or p[i, 1] > y/2:
-            y_dis = abs(p[i, 1]) - y/2
-            # If the y-position is also not inside, find distance
-            if -x/2 > p[i, 0] or p[i, 0] > x/2:
-                x_dis = abs(p[i, 0]) - x/2
-                dist[i] = np.linalg.norm([x_dis, y_dis])
-            # If y-position is inside, the closest distance is y-distance
-            else:
-                dist[i] = y_dis
-
-        # Check circle
-        if check_in_circle(circle, p[i, 0], p[i, 1]):
-            polar_point = [p[i, 0] - circle[0], p[i, 1] - circle[1]]
-            dist[i] = np.linalg.norm(polar_point)
-
-        # Check square
-        if check_in_square(square, p[i, 0], p[i, 1]):
-            # [x0, y0, l]
-            lines = np.array([[abs(square[0] + square[2]/2 - p[i, 0])],
-                               [abs(square[0] - square[2]/2 - p[i, 0])],
-                               [abs(square[1] + square[2]/2 - p[i, 1])],
-                               [abs(square[1] - square[2]/2 - p[i, 1])]])
-            dist[i] = min(lines)
-
-        # Check rectangle
-        if check_in_rectangle(rectangle, p[i, 0], p[i, 1]):
-            # [x0, y0, l, w]
-            lines = np.array([[abs(rectangle[0] + rectangle[3]/2 - p[i, 0])],
-                               [abs(rectangle[0] - rectangle[3]/2 - p[i, 0])],
-                               [abs(rectangle[1] + rectangle[2]/2 - p[i, 1])],
-                               [abs(rectangle[1] - rectangle[2]/2 - p[i, 1])]])
-            dist[i] = min(lines)
-
-        # Check if point is inside
-        if (not check_in_rectangle(rectangle, p[i, 0], p[i, 1]) and not check_in_circle(circle, p[i, 0], p[i, 1]) \
-            and not check_in_square(square, p[i, 0], p[i, 1])) and \
-                (-x/2 < p[i, 0] < x/2) and (-y/2 < p[i, 1] < y/2):
-            dist[i] = -1
-        # If neither hit then point is on boundary in which continue
-        else: continue
-
-    return dist
+        sdf = np.zeros(a.shape[0])
+        for j in range(a.shape[0]):
+            h = min(1, max(0, np.dot(p[i] - a[j], b[j] - p[i]) / np.linalg.norm(b[j] - a[j])))
+            sdf[j] = np.linalg.norm(p[i] - a[j] - h * (b[j] - a[j]))
+        sdf_min[i] = np.min(sdf)
+    return sdf_min
 
 
-def check_in_rectangle(rectangle, xp, yp):
-    """Check if the point [xp, yp] is in the given rectangle [x0, y0, l, w]
+def dpoly(V, p):
+    """Signed distance function for "p" points with respect to a generic polygon made up by connecting "V" vertices in a
+     closed path
 
-    :param rectangle: [x0, y0, l, w]
-    :param xp: x-coordinate of point
-    :param yp: y-coordinate of point
-    :return: True/False depending on if point is/isn't inside the rectangle
+    :param V: Vertices of the polygon given [N, 2] x-y coordinate pair array
+    :param p: Points of the domain given [N, 2] x-y coordinate pair array
     """
-    if rectangle[0] - rectangle[2] / 2 < xp < rectangle[0] + rectangle[2] / 2 and \
-        rectangle[1] - rectangle[3] / 2 < yp < rectangle[1] + rectangle[3] / 2:
-        return True
-    else:
-        return False
+    # Compute all the line segment pairs
+    a = np.zeros((V.shape[0], 2))
+    b = np.zeros((V.shape[0], 2))
+    for i in range(V.shape[0]):
+        # If we're at the end - set the last segment to loop to the first
+        if i == (V.shape[0] - 1):
+            if abs(V[-1, :] - V[0, :]).sum() < 1e-8:
+                V[-1, :] += 1e-10
+            a[i, :] = V[-1, :]
+            b[i, :] = V[0, :]
+        # Otherwise the line segment is made up of its node and next node
+        else:
+            if abs(V[i, :] - V[i + 1, :]).sum() < 1e-8:
+                V[i, :] += 1e-10
+            a[i, :] = V[i, :]
+            b[i, :] = V[i + 1, :]
+
+    poly_sdf = (-1)**linepath(V).contains_points(p) * sdf_segment(a, b, p)
+    return poly_sdf
 
 
-def check_in_square(square, xp, yp):
-    """Check if the point [xp, yp] is in the given rectangle [x0, y0, l, w]
+def ddiff(d1, d2):
+    """ Signed distance function to find the difference between two regions described by the specific distance functions
+    d1 and d2.
 
-    :param square: [x0, y0, l]
-    :param xp: x-coordinate of point
-    :param yp: y-coordinate of point
-    :return: True/False depending on if point is/isn't inside the rectangle
+    :param d1: Distance function for the encompassing polygon
+    :param d2: Distance function for the internal polygon
     """
-    if square[0] - square[2] / 2 < xp < square[0] + square[2] / 2 and \
-        square[1] - square[2] / 2 < yp < square[1] + square[2] / 2:
-        return True
-    else:
-        return False
+    diff = np.vstack((d1, -d2)).max(0)
+    return diff
 
 
-def check_in_circle(circle, xp, yp):
-    """Checks if the point [xp, yp] is in the given circle [x0, y0, r]
+def sqr_bbox_wall_gen(L, W, ds):
+    """Generates a numpy array that consists of coordinates of cell vertices located along the walls of the bounding box
+    of the computational domain.
 
-    :param circle: [x0, y0, r]
-    :param xp: x-coordinate of point
-    :param yp: y-coordinate of point
-    :return: True/False depending on if point is/isn't inside the circle
+    :param L: Length of the computational domain
+    :param W: Width (height in 2D space) of the computational domain
+
+    return: V - [N, 2] x-y coordinate pairs of points that enclose an L x W bounding box with ds step
     """
-    polar_point = [xp - circle[0], yp - circle[1]]
-    if np.linalg.norm(polar_point) < circle[2]:
-        return True
-    else:
-        return False
+    # Start at [pos, pos] and go clockwise
+    x_L = np.arange(-L / 2, L / 2 + ds, ds)
+    y_L_top = np.ones(x_L.shape[0]) * W / 2
+    y_L_bot = -np.ones(x_L.shape[0]) * W / 2
+
+    y_w = np.arange(-W / 2, W / 2, ds)
+    x_W_left = -np.ones(y_w.shape[0]) * L / 2
+    x_W_right = np.ones(y_w.shape[0]) * L / 2
+
+    x_coord = np.hstack((x_L, x_W_right[1::], np.flip(x_L[1::]), x_W_left))
+    y_coord = np.hstack((y_L_top, np.flip(y_w[1::]), y_L_bot[1::], y_w))
+
+    V = np.array(([x_coord, y_coord])).T
+    return V
 
 
-# MATLAB compatability utitly borrowed from: https://github.com/bfroehle/pydistmesh
+def circle_bbox_wall_gen(r, dtheta):
+    """Generates a numpy array that consists of coordinates of cell vertices for a circle with radius r with segments
+    every dtheta intervals
+
+    :param r: Radius
+    :param dtheta: Discretized theta
+
+    return: V - [N, 2] x-y coordinate pairs of points that enclose an L x W bounding box with ds step
+    """
+    theta = np.arange(0, 360 + dtheta, dtheta)
+    theta = theta[1::] * np.pi / 180
+
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    V = np.array(([x, y])).T
+
+    return V
+
+# TODO: Add functions for generating triangles and diamonds for various supersonic airfoil analysis
+
+# MATLAB compatability utility borrowed from: https://github.com/bfroehle/pydistmesh
 def dense(I, J, S, shape=None, dtype=None):
     """
-    Similar to MATLAB's SPARSE(I, J, S, ...), but instead returning a
-    dense array.
+    Similar to MATLAB's SPARSE(I, J, S, ...), but instead returning a dense array.
     Usage
     -----
     shape = (m, n)
@@ -440,3 +247,68 @@ def dense(I, J, S, shape=None, dtype=None):
     # Turn these into 1-d arrays for processing.
     S = S.flat; I = I.flat; J = J.flat
     return spa.coo_matrix((S, (I, J)), shape, dtype).toarray()
+
+
+def setdiff_rows(A, B, return_index=False):
+    """
+    Similar to MATLAB's setdiff(A, B, 'rows'), this returns C, I
+    where C are the row of A that are not in B and I satisfies
+    C = A[I,:].
+    Returns I if return_index is True.
+    """
+    A = np.require(A, requirements='C')
+    B = np.require(B, requirements='C')
+
+    assert A.ndim == 2, "array must be 2-dim'l"
+    assert B.ndim == 2, "array must be 2-dim'l"
+    assert A.shape[1] == B.shape[1], \
+           "arrays must have the same number of columns"
+    assert A.dtype == B.dtype, \
+           "arrays must have the same data type"
+
+    # NumPy provides setdiff1d, which operates only on one dimensional
+    # arrays. To make the array one-dimensional, we interpret each row
+    # as being a string of characters of the appropriate length.
+    orig_dtype = A.dtype
+    ncolumns = A.shape[1]
+    dtype = np.dtype((np.character, orig_dtype.itemsize*ncolumns))
+    C = np.setdiff1d(A.view(dtype), B.view(dtype)) \
+        .view(A.dtype) \
+        .reshape((-1, ncolumns), order='C')
+    if return_index:
+        raise NotImplementedError
+    else:
+        return C
+
+
+def unique_rows(A, return_index=False, return_inverse=False):
+    """
+    Similar to MATLAB's unique(A, 'rows'), this returns B, I, J
+    where B is the unique rows of A and I and J satisfy
+    A = B[J,:] and B = A[I,:]
+    Returns I if return_index is True
+    Returns J if return_inverse is True
+    """
+    A = np.require(A, requirements='C')
+    assert A.ndim == 2, "array must be 2-dim'l"
+
+    orig_dtype = A.dtype
+    ncolumns = A.shape[1]
+    dtype = np.dtype((np.character, orig_dtype.itemsize*ncolumns))
+    B, I, J = np.unique(A.view(dtype),
+                        return_index=True,
+                        return_inverse=True)
+
+    B = B.view(orig_dtype).reshape((-1, ncolumns), order='C')
+
+    # There must be a better way to do this:
+    if (return_index):
+        if (return_inverse):
+            return B, I, J
+        else:
+            return B, I
+    else:
+        if (return_inverse):
+            return B, J
+        else:
+            return B

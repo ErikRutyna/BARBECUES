@@ -1,4 +1,3 @@
-import preprocess as pp
 import matplotlib.pyplot as plt
 import numpy as np
 import helper

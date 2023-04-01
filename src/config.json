@@ -1,10 +1,10 @@
 {    
     "simulation": [
        {
-        "mesh_path": "../Meshes/mesh0.gri",
+        "mesh_path": "../Meshes/demo_plate.gri",
         "restart_files": false,
 
-          "adaptive_cycles": 5,
+          "adaptive_cycles": 0,
           "adaptation_percentage": 0.05,
 
           "flux_method": 1
@@ -26,7 +26,7 @@
 
     "initialization": [
         {
-            "init": "moc"
+            "init": "weak"
         }
     ],
 
@@ -55,7 +55,7 @@
     
     "flight": [
        {
-          "freestream_mach_numer": 3,
+          "freestream_mach_numer": 2,
           "angle_of_attack": 4.0,
           "altitude": 30000.0
        }
