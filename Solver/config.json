@@ -1,0 +1,63 @@
+{    
+    "simulation": [
+       {
+        "mesh_path": "../Meshes/diamond_airfoil.gri",
+        "restart_files": false,
+
+          "adaptive_cycles": 0,
+          "adaptation_percentage": 0.075,
+
+          "flux_method": 0
+       }
+    ],
+
+    "convergence": [
+        {
+            "convergence_method": 0,
+
+            "convergence_minimum": 1e-5,
+            "smart_convergence_minimum": 1e-2,
+
+            "smart_convergence_length": 42,
+            "smart_convergence_error_tol": 0.025,
+            "smart_convergence_ascs": [0, 1]
+        }
+    ],
+
+    "initialization": [
+        {
+            "init": "freestream"
+        }
+    ],
+
+    "data_processing": [
+        {
+            "filename": "diamond_airfoil",
+            "plot_mesh": true,
+            "plot_mach": true,
+            "plot_stag_press": true,
+            "plot_residuals": true,
+            "plot_performance": true
+        }
+    ],
+
+    "fluid": [
+       {
+          "name": "CPG_Air",
+          "cp": 1005.0,
+          "cv": 718.0,
+          "MW": 0.0289647,
+          "viscosity_ref": 1.716e-5,
+          "viscosity_ref_temp": 273,
+          "viscosity_ref_S": 111
+       }
+    ],
+    
+    "flight": [
+       {
+          "freestream_mach_numer": 3,
+          "angle_of_attack": 5.0,
+          "altitude": 30000.0
+       }
+    ]
+ }
