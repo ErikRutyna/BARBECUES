@@ -31,9 +31,9 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     iteration_number = 1
     # All residual coefficient tracking for standard convergence/plotting purposes
     residual_norms = np.zeros((0, 5))
-    coefficients = np.zeros((0, 4))
+    coefficients = np.zeros((0, 3))
     # Asymptotic Convergence Criteria for Smart Convergence
-    ascs = np.empty((0, 4))
+    ascs = np.empty((0, 3))
     # TODO: Investigate dynamic CFL numbers, HoM (gradient-based), and HoI schemes (RK2, RK4)
     cfl = 1
 
@@ -77,8 +77,8 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
         # Coefficient tracking - exported for plotting purposes
         stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state, y), y)
         atpr = helper.calculate_atpr(V, BE, stagnation_pressure)
-        cd, cl, cmx = helper.calculate_forces_moments(V, BE, state, M, a, y)
-        coefficients = np.vstack((coefficients, np.reshape(np.array((cd, cl, cmx, atpr)), (1, 4))))
+        cd, cl = helper.calculate_forces(V, BE, state, M, a, y)
+        coefficients = np.vstack((coefficients, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
 
         # Calculate delta_t and timestep forward the local states
         deltat_deltaa = np.divide(2 * cfl, sum_sl)
@@ -104,16 +104,13 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
                         if asc == 2:
                             if abs(ascs[-1, 2] - np.mean(ascs[-s_len+1::, 2])) / np.mean(ascs[-s_len+1::, 2]) < s_e_tol:
                                 converge_check.append(True)
-                        if asc == 3:
-                            if abs(ascs[-1, 3] - np.mean(ascs[-s_len+1::, 3])) / np.mean(ascs[-s_len+1::, 3]) < s_e_tol:
-                                converge_check.append(True)
                     # If all checks pass, then its converged
                     if np.all(np.array(converge_check)):
                         print_resi = float(residual_norms[-1, 4])
                         print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
                         return residual_norms, coefficients
                 # Append the newly calculated values for the ASCs
-                ascs = np.vstack((ascs, np.reshape(np.array((cd, cl, cmx, atpr)), (1, 4))))
+                ascs = np.vstack((ascs, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
             # If Smart convergence somehow fails, employ standard convergence as a backup method
             elif residual_norms[-1, 4] < c_tol:
                 print_resi = float(residual_norms[-1, 4])

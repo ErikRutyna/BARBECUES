@@ -16,6 +16,8 @@ def calculate_atpr(V, BE, stag_pressure):
     :return: Double that is the average total pressure recovery (ATPR)
     """
     exit_edges = BE[BE[:, 3] == 1, :]
+    if exit_edges.shape[0] == 0:
+        return 0
 
     # Boundary edge stagnation pressures
     boundary_stagnation = stag_pressure[exit_edges[:, 2]]
@@ -129,7 +131,7 @@ def calculate_static_pressure_single(state, y):
     c = (y - 1)
     # Velocity term
     q = np.power(np.divide(state[1], state[0]), 2) + np.power(np.divide(state[2], state[0]), 2)
-    # p = (y - 1) * (rho*E - 0.5 * rho * q^2)
+
     pressure = c * (state[3] - 0.5 * np.multiply(state[0], q))
 
     return pressure
@@ -158,7 +160,7 @@ def calculate_pressure_coefficient(state, M, a, y):
 
 
 @njit(cache=True)
-def calculate_forces_moments(V, BE, state, M, a, y):
+def calculate_forces(V, BE, state, M, a, y):
     """Calculate the drag coefficients, lift coefficient, and the pitching moment about the origin of the domain (0,0).
 
     :param V: Node coodinates
@@ -167,38 +169,27 @@ def calculate_forces_moments(V, BE, state, M, a, y):
     :param a: Angle of Attack
     :return: cd, cl, cmx (force and moment coefficients)
     """
-    cp = calculate_pressure_coefficient(state, M, a, y)
+    cx = 0
+    cy = 0
 
-    cd = 0
-    cl = 0
-    cmx = 0
+    freestream_state = initzn.init_state_mach(M, a, y)
+    Pinf = calculate_static_pressure_single(freestream_state, y)
+    qinf = y / 2 * Pinf * M**2
 
-    # Projected x-length of the object in the flow
-    nodes = []
-    for i in range(BE.shape[0]):
-        if BE[i, 3] == 0:
-            nodes.append(BE[i, 0])
-            nodes.append(BE[i, 1])
-
-    x_pos = []
-    for i in range(len(nodes)):
-        x_pos.append(V[nodes[i], 0])
-    x_pos = np.array(x_pos)
-
-    l_tot = np.abs(x_pos.max() - x_pos.min())
 
     for i in range(BE.shape[0]):
         if BE[i, 3] == 0:
             l, n = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
+            pressure = calculate_static_pressure_single(state[BE[i, 2]], y)
+
             # Pressure integrals for lift and drag
-            cl += 1 / l_tot * cp[BE[i, 2]] * -n[1] * l * math.cos(a)
-            cd += 1 / l_tot * cp[BE[i, 2]] * n[0] * l
+            cx += pressure * n[0] * l
+            cy += pressure * n[1] * l
 
-            # Moment = F x d, d is defined as distance from origin to midpoint of edge
-            midpoint = (V[BE[i, 0]] + V[BE[i, 1]]) / 2
-            cmx += (cp[BE[i, 2]] * n[0] * l * midpoint[0] - cp[BE[i, 2]] * n[1] * l * midpoint[1]) / l_tot ** 2
+    cd = (cy * np.sin(a * np.pi / 180) + cx * np.cos(a * np.pi / 180)) / qinf
+    cl = (cy * np.cos(a * np.pi / 180) - cx * np.sin(a * np.pi / 180)) / qinf
 
-    return cd, cl, cmx
+    return cd, cl
 
 
 @njit(cache=True)

@@ -213,11 +213,8 @@ def plot_performance(coefficients):
     axs[0, 1].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 1], 'tab:green')
     axs[0, 1].set_title('Pressure Lift Coefficient, $C_L$ = {0}'.format(round(coefficients[-1, 1], 8)))
 
-    axs[1, 0].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 2], 'tab:purple')
-    axs[1, 0].set_title('Pressure Pitching Moment Coefficient, $C_m$ = {0}'.format(round(coefficients[-1, 2], 8)))
-
-    axs[1, 1].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 3], 'tab:red')
-    axs[1, 1].set_title('Average Total Pressure Recovery Factor, $ATPR$ = {0}'.format(round(coefficients[-1, 3], 8)))
+    axs[1, 1].plot(np.array(range(coefficients.shape[0])) + 1, coefficients[:, 2], 'tab:red')
+    axs[1, 1].set_title('Average Total Pressure Recovery Factor, $ATPR$ = {0}'.format(round(coefficients[-1, 2], 8)))
 
     f.tight_layout()
     f.savefig('coefficients.png')

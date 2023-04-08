@@ -14,20 +14,20 @@ def main():
     bbox_walls = geom_gen.sqr_bbox_wall_gen(2*L, 2*L, 0.2)
 
     # Circle
-    interior_walls = geom_gen.circle_bbox_wall_gen(0.25, 15)
+    # interior_walls = geom_gen.circle_bbox_wall_gen(0.25, 15)
 
     # Flat Plate
-    interior_walls = geom_gen.sqr_bbox_wall_gen(2, 2, 0.2)
+    # interior_walls = geom_gen.sqr_bbox_wall_gen(2, 2, 0.2)
 
     # Triangle
-    test_tri = geom_gen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
+    # test_tri = geom_gen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
 
 
     # Diamond
     test_foil = geom_gen.diamond_bbox_wall_gen(2, 10, 0.1)
 
     # CSV
-    test_csv = geom_gen.csv_bbox_Wall_gen('small_square.csv')
+    # test_csv = geom_gen.csv_bbox_Wall_gen('small_square.csv')
 
     # Anonymous function that serves as a signed distance function to determine how to move points to generate a "high
     # quality mesh"; nested ddiff statements can be used to overlap shapes and do boolean intersections
@@ -160,14 +160,16 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
         f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
 
     # Write out the external boundary edges
-    inflow = np.squeeze(np.array(inflow))
-    f.write('{0} 2 Inflow\n'.format(inflow.shape[0]))
-    for pair in inflow:
-        f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
+    # f.write('0 2 Exit\n')
 
     outflow = np.squeeze(np.array(outflow))
     f.write('{0} 2 Outflow\n'.format(outflow.shape[0]))
     for pair in outflow:
+        f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
+
+    inflow = np.squeeze(np.array(inflow))
+    f.write('{0} 2 Inflow\n'.format(inflow.shape[0]))
+    for pair in inflow:
         f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
 
     # Write out the elements

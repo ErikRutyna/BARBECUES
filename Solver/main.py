@@ -29,7 +29,7 @@ def main():
 
     config = pp.preprocess()
     residuals = np.empty((0, 5))
-    coefficients = np.empty((0, 4))
+    coefficients = np.empty((0, 3))
 
     # Grid Loading
     mesh = readgri.readgri(config['mesh_path'])
@@ -94,6 +94,7 @@ def main():
         state_vectors, mesh = meshref.adapt_mesh(state_vectors, mesh['E'],
                                                  mesh['V'], mesh['IE'],
                                                  mesh['BE'],
+                                                 mesh['Bname'],
                                                  config['adaptation_percentage'],
                                                  config['y'],
                                                  config['filename'] + '{0}.gri'.format(i + 1))

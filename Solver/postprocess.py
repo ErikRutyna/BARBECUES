@@ -68,8 +68,7 @@ def postprocess(mesh, state, coefficients, residuals, config, i, t):
     f.write('Flight Performance:\n')
     f.write('Lift Coefficient, C_L: {0}\n'.format(coefficients[-1, 1]))
     f.write('Pressure Drag Coefficient, C_D: {0}\n'.format(coefficients[-1, 0]))
-    f.write('Pitching Moment Coefficient, C_mx: {0}\n'.format(coefficients[-1, 2]))
-    f.write('Average Total Pressure Recovery Factor (@ Exit BCs), ATPR: {0}\n'.format(coefficients[-1, 3]))
+    f.write('Average Total Pressure Recovery Factor (@ Exit BCs), ATPR: {0}\n'.format(coefficients[-1, 2]))
     f.write('Approx. Viscous Drag Coefficient, C_f: {0}\n'.format(cf))
     f.write('Approx. Total Drag Coefficient, C_D_tot: {0}\n\n'.format(cf + coefficients[-1, 1]))
 

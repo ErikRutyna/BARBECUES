@@ -116,7 +116,7 @@ def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-
         # Part 7. - Termination condition: All nodes that had to be moved didn't move that much
         # TODO: Plot this residual as a function of iteration # and have title show inputs/nodes #/cells #
         # TODO: Add the counter/residual amount as an exit condition
-        if counter > 250 or (np.sqrt((k * Ftot[p<-geps]**2).sum(1))/h).max() < ttol:
+        if counter > 50 or (np.sqrt((k * Ftot[p<-geps]**2).sum(1))/h).max() < ttol:
             break
     print('Number of iterations to make a good mesh: {0}'.format(counter))
     return V, T
