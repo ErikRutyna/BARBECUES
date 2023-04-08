@@ -4,7 +4,7 @@ import os
 import distmesh as dm
 
 
-# TODO: Go over the GRIFT program and add some proper Python Linting to make it look pretty
+# TODO: Go over the GRILS program and add some proper Python Linting to make it look pretty
 def main():
     # Define the size of the bounding box of the computational domain, L can be used if a square domain is desired
     L = 4

@@ -8,15 +8,18 @@ More information about such features can be found in the Wiki (implemented
 "soon"). The simulation is controlled through a JSON file called config.json, 
 and an example can be found in the source code. 
 
-The solver also comes with its own 2D meshing package called GRIFT (*.GRI File 
-Triangulation) that is similar in architecture to the DistMesh (in that it 
-runs the core underlying level-set based method for producing high quality 
-meshes), but has some of its own features and changes. Some examples of how to 
-use GRIFT can be seen in the "mesh_generation.py" script.
+The solver also has another utility that can be used to generate meshes called
+the G.R.I.L.S Mesher (*.gri Level Set Mesher). The mesher  is similar in 
+architecture to the DistMesh (in that it runs the core underlying level-set 
+based method for producing high quality meshes), but has some of its own 
+features and changes. Some examples of how to use GRIFT can be seen in 
+the "mesh_generation.py" script.
 
 NOTE: There appear to be some issues regarding freestream conditions with 
 different initialization methods and getting the flowfield to converge. It is
-recommended to use either "freestream" or "exp" based initialization methods.
+recommended to use either "freestream" or "exp" based initialization methods. 
+Eventually all methods for initialization will be replaced with either a level 
+set method or strict freestream method.
 
 ## Boundary Conditions
 BCs must follow this convention in order for the NUMBA JIT to properly 
@@ -73,10 +76,9 @@ state variables in the cells of the domain.
 
 
 # Changelog
-V1.3.1 Additional geometries added to GRIFT.  
+V1.3.1 Additional geometries added to GRILS.  
 
-
-V1.3.0 A new meshing script is available under "mesh_generation.py" which can 
+V1.3.0 A new meshing utility available under GRILS, which can 
 be used to generate basic meshes of shapes object in some flow-field. V1.3.0 
 can only produce flat plates and circles, and a combination of them can be 
 modeled in a flow-field. More complex geometries are going to be added in 
