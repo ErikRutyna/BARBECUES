@@ -21,17 +21,21 @@ def F_euler_2d(u, y):
     F[0, 0] = u[1]
     F[0, 1] = u[2]
 
+    off_momentum = u[1] * u[2] / u[0]
     # x-momentum
     F[1, 0] = u[1] ** 2 / u[0] + P
-    F[1, 1] = u[1] * u[2] / u[0]
+    F[1, 1] = off_momentum
 
     # y-momentum
-    F[2, 0] = u[1] * u[2] / u[0]
+    F[2, 0] = off_momentum
     F[2, 1] = u[2] ** 2 / u[0] + P
 
+    # Enthalpy
+    H = (u[3] + P) / u[0]
+
     # Energy
-    F[3, 0] = (u[1] * u[3] + u[1] * P) / u[0]
-    F[3, 1] = (u[2] * u[3] + u[2] * P) / u[0]
+    F[3, 0] = u[1] * H
+    F[3, 1] = u[2] * H
 
     return F
 

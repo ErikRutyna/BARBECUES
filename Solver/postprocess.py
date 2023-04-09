@@ -70,7 +70,7 @@ def postprocess(mesh, state, coefficients, residuals, config, i, t):
     f.write('Pressure Drag Coefficient, C_D: {0}\n'.format(coefficients[-1, 0]))
     f.write('Average Total Pressure Recovery Factor (@ Exit BCs), ATPR: {0}\n'.format(coefficients[-1, 2]))
     f.write('Approx. Viscous Drag Coefficient, C_f: {0}\n'.format(cf))
-    f.write('Approx. Total Drag Coefficient, C_D_tot: {0}\n\n'.format(cf + coefficients[-1, 1]))
+    f.write('Approx. Total Drag Coefficient, C_D_tot: {0}\n\n'.format(cf + coefficients[-1, 0]))
 
 
     # Various reference and freestream quantities

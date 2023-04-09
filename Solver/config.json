@@ -1,11 +1,11 @@
 {    
     "simulation": [
        {
-        "mesh_path": "../Meshes/diamond_airfoil.gri",
+        "mesh_path": "../Meshes/mesh0.gri",
         "restart_files": false,
 
           "adaptive_cycles": 2,
-          "adaptation_percentage": 0.075,
+          "adaptation_percentage": 0.05,
 
           "flux_method": 0
        }

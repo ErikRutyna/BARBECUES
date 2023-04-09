@@ -76,6 +76,10 @@ state variables in the cells of the domain.
 
 
 # Changelog
+V 1.3.1.1 Small change to flux.py to avoid extra computations resulting in 
+~4.5% increase in solver speed. Also fixed *.out files using the wrong value
+for the pressure drag when computing approximated total drag.
+
 V1.3.1 Additional geometries added to GRILS.  
 
 V1.3.0 A new meshing utility available under GRILS, which can 
