@@ -45,15 +45,15 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     for i in range(IE.shape[0]):
         ie_l[i], ie_n[i] = cgf.edge_properties_calculator(V[IE[i, 0]], V[IE[i, 1]])
 
+    # Reset the residual and timestep arrays
+    residuals = np.zeros((E.shape[0], 4))  # Residuals from fluxes
+    sum_sl = np.transpose(np.zeros((E.shape[0])))  # s*l vector for computing time steps
+
     while not converged:
         if iteration_number % 10 == 0:
             # Print out a small tracking statement every 10 iterations to watch the program
             print_resi = float(residual_norms[-1, 4])
             print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
-
-        # Reset the residual and timestep arrays
-        residuals = np.zeros((E.shape[0], 4))  # Residuals from fluxes
-        sum_sl = np.transpose(np.zeros((E.shape[0])))  # s*l vector for computing time steps
 
         # If-elif-else tree for flux method selection
         if f_method == 1:
@@ -64,18 +64,19 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
         else:
             residuals, sum_sl = flux.compute_residuals_roe(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y)
 
-        cont_norm = np.linalg.norm(residuals[:, 0], ord=1)
-        xmom_norm = np.linalg.norm(residuals[:, 1], ord=1)
-        ymom_norm = np.linalg.norm(residuals[:, 2], ord=1)
-        ener_norm = np.linalg.norm(residuals[:, 3], ord=1)
-        glob_norm = np.linalg.norm(residuals, ord=1)
+        cont_norm = np.abs(residuals[:, 0]).sum()
+        xmom_norm = np.abs(residuals[:, 1]).sum()
+        ymom_norm = np.abs(residuals[:, 2]).sum()
+        ener_norm = np.abs(residuals[:, 3]).sum()
+        glob_norm = np.abs(residuals).sum()
         new_norms = np.array((cont_norm, xmom_norm, ymom_norm, ener_norm, glob_norm))
 
         # Residual tracking - L1 norms of [continuity, x-moment, y-momentum, energy, all]
         residual_norms = np.vstack((residual_norms, np.reshape(new_norms, (1, 5))))
 
         # Coefficient tracking - exported for plotting purposes
-        stagnation_pressure = helper.calculate_stagnation_pressure(state, helper.calculate_mach(state, y), y)
+        local_Mach = helper.calculate_mach(state, y)
+        stagnation_pressure = helper.calculate_stagnation_pressure(state, local_Mach, y)
         atpr = helper.calculate_atpr(V, BE, stagnation_pressure)
         cd, cl = helper.calculate_forces(V, BE, state, M, a, y)
         coefficients = np.vstack((coefficients, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
