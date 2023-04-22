@@ -1,9 +1,9 @@
 Meshes/mesh0.gri
 
-Solver/solver.prof
 Output/*
 PDFs/*
 
-src/__pycache__
+BARBECUES/__pycache__
 .idea/*
 git_commands.txt
+Solver/solver.prof
