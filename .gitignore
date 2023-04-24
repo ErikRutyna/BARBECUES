@@ -3,6 +3,10 @@ Meshes/mesh0.gri
 Output/*
 PDFs/*
 
+GRILS/__pycache__
+GRILS/report.log
+GRILS/optimize_distmesh.py
+
 BARBECUES/__pycache__
 .idea/*
 git_commands.txt

@@ -1,74 +1,99 @@
-import geometry_generation as geom_gen
+import geometry_generation as geomGen
+import matplotlib.pyplot as plt
+import distmesh as dm
 import numpy as np
 import os
-import distmesh as dm
 
 
-# TODO: Go over the GRILS program and add some proper Python Linting to make it look pretty
+# TODO: Make another MAIN.py that is for pyswarms in order to find the most optimal running conditions
 def main():
-    # Define the size of the bounding box of the computational domain, L can be used if a square domain is desired
-    L = 4
-    bbox_out = np.array([-L, L, -L, L])
+    """This main function can be used for mesh generation. Various examples have been provided inside the function and
+    can be used as a reference when one might want to make their own mesh. The process follows a similar pattern for
+    any mesh generated this way.
 
-    # Bounding box wall edges
-    bbox_walls = geom_gen.sqr_bbox_wall_gen(2*L, 2*L, 0.2)
+    1. The outer bounding box (outer edges of the computational domain) are defined
+    2. The outer bounding box has its edges discretized
+    3. An internal shape is generated and has its edges discretized into an array of points, OR a set of points is read
+        in from a .csv file
+    4. An anonymous (lambda function) signed distance function is generated that can be used to find the closest point
+        inside the domain to the nearest boundary. For most cases of "object-in-flow" this is a boolean intersection of
+        two polygon signed distance functions. This example is shown
+    5. The distmesh algorithm is called. The default parameters have been optimized, but can be varied depending on how
+        much the user cares about mesh quality. It is recommended to have a desired edge of length approximately equal
+        to 1/2 the smallest edge length. Smaller iteration count is used as a default since 5 examples are run.
+    6. The mesh is written out to file.
+
+    Returns
+    -------
+    Writes out the mesh in ../Meshes/ directory in the *.gri format
+    """
+    # Step 1. Defining the Bounding Box of the computational domain. For all examples provided, we will be using the
+    # same sized computational domain, a square with side length 2*L.
+    L = 4
+    compDomainBoundingBox = np.array([-L, L, -L, L])
+
+    # Step 2. The bounding box of the computational domain is discretized. It is recommended to use approximately the
+    # same value for discretizing both the computational domain and the desired edge length in distmesh.
+    compDomainBoundingBoxEdges = geomGen.sqr_bbox_wall_gen(2 * L, 2 * L, 0.2)
+
+    # ------------------------------------------------------------------------------------
+    # Steps 3 - 6 will be unique to each piece of geometry. Some examples are shown below.
+    # ------------------------------------------------------------------------------------
 
     # Circle
-    # interior_walls = geom_gen.circle_bbox_wall_gen(0.25, 15)
+    # Step 3. Generating the circle with a radius of 1 unit and a theta-step of 15 degrees
+    demoCircle = geomGen.circle_bbox_wall_gen(1, 15)
+    # Step 4. Anonymous signed distance function for a boolean intersection of the bounding box square and the circle
+    demoCircleSDF = lambda p: dm.ddiff(dm.dpoly(compDomainBoundingBoxEdges, p),
+                             dm.dpoly(demoCircle, p))
+    # Step 5. Calling distmesh
+    V, T = dm.distmesh2d(demoCircleSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoCircle)),
+                         0.15, 1.1, 100)
+    # Step 6. Writing the mesh
+    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoCircle, True), None, 'demoCircle')
+
 
     # Flat Plate
-    # interior_walls = geom_gen.sqr_bbox_wall_gen(2, 2, 0.2)
+    # Step 3. Generating a flat plate with a length of 2 units and a width of 0.2 units and a spacing of 0.1 units
+    demoPlate = geomGen.sqr_bbox_wall_gen(2, 0.2, 0.1)
+    # Step 4. Anonymous signed distance function for a boolean intersection of the bounding box square and the circle
+    demoPlateSDF = lambda p: dm.ddiff(dm.dpoly(compDomainBoundingBoxEdges, p),
+                             dm.dpoly(demoPlate, p))
+    # Step 5. Calling distmesh
+    V, T = dm.distmesh2d(demoPlateSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoPlate)),
+                         0.15, 1.1, 100)
+    # Step 6. Writing the mesh
+    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoPlate, True), None, 'demoPlate')
+
 
     # Triangle
-    # test_tri = geom_gen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
+    # Step 3. Generating a triangle with the 3 given points and a distance step size of 0.1 units
+    demoTri= geomGen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
+    # Step 4. Anonymous signed distance function for a boolean intersection of the bounding box square and the circle
+    demoTriSDF = lambda p: dm.ddiff(dm.dpoly(compDomainBoundingBoxEdges, p),
+                             dm.dpoly(demoTri, p))
+    # Step 5. Calling distmesh
+    V, T = dm.distmesh2d(demoTriSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoTri)),
+                         0.15, 1.1, 100)
+    # Step 6. Writing the mesh
+    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoTri, True), None, 'demoTriangle')
 
 
     # Diamond
-    test_foil = geom_gen.diamond_bbox_wall_gen(2, 10, 0.1)
-
-    # CSV
-    # test_csv = geom_gen.csv_bbox_Wall_gen('small_square.csv')
-
-    # Anonymous function that serves as a signed distance function to determine how to move points to generate a "high
-    # quality mesh"; nested ddiff statements can be used to overlap shapes and do boolean intersections
-    sdf = lambda p: dm.ddiff(dm.dpoly(bbox_walls, p),
-                             dm.dpoly(test_foil, p))
-
-    # Generate nodes and cells in the domain via a level-set based algorithm
-    # V, T = dm.distmesh2d(sdf, 0.25, bbox_out, np.vstack((bbox_walls, interior_walls)), 0.2, 1.2, 6e-1, 1e-3)
-
-    # Writes the mesh out to the "Meshes" directory
-    # write_mesh(bbox_out, V, T, internal_walls(interior_walls, True), None, 'demo_plate.gri')
-
-    # Diamond airfoil generation
-    V, T = dm.distmesh2d(sdf, 0.15, bbox_out, np.vstack((bbox_walls, test_foil)), 0.2, 1.2, 1e-3, 1e-3)
-
-    # Triangle Test generation
-    # V, T = dm.distmesh2d(sdf, 0.15, bbox_out, np.vstack((bbox_walls, test_tri)), 0.2, 1.2, 6e-1, 1e-3)
-
-    # CSV Read Test generation
-    # V, T = dm.distmesh2d(sdf, 0.2, bbox_out, np.vstack((bbox_walls, test_csv)), 0.2, 1.2, 6e-1, 1e-3)
-
-    # Writes the mesh out to the "Meshes" directory
-    write_mesh(bbox_out, V, T, internal_walls(test_foil, True), None, 'diamond_airfoil.gri')
+    # Step 3. Generating a diamond with a chord length of 2 units and a half angle of 10 degrees with distance step size of 0.1 units
+    demoDiamond = geomGen.diamond_bbox_wall_gen(2, 10, 0.1)
+    # Step 4. Anonymous signed distance function for a boolean intersection of the bounding box square and the circle
+    demoDiamondSDF = lambda p: dm.ddiff(dm.dpoly(compDomainBoundingBoxEdges, p),
+                             dm.dpoly(demoDiamond, p))
+    # Step 5. Calling distmesh
+    V, T = dm.distmesh2d(demoDiamondSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoDiamond)),
+                         0.15, 1.1, 100)
+    # Step 6. Writing the mesh
+    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoDiamond, True), None, 'demoDiamond')
     return
 
 
-def internal_walls(wall_points, looped):
-    """Returns an [N, 4] array of x-y coordinates that make up each edge for a given path of edges.
-
-    :param wall_points: [N, 2] array of x-y coordinate pairs that make up the nodes for all edges
-    :param looped: Boolean - True for when the wall loops back from the point to the first, false if the wall does not
-    """
-    wall_edges = []
-    for i in range(wall_points.shape[0]):
-        if i == (wall_points.shape[0]-1) and looped:
-            wall_edges.append(np.array([wall_points[-1], wall_points[0]]).flatten())
-        else: wall_edges.append(np.array([wall_points[i], wall_points[i+1]]).flatten())
-    return np.array(wall_edges)
-
-
-def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
+def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh'):
     """Writes the newly made mesh as a *.gri file in the ../Meshes/ directory if it exists and creates it if it doesn't
 
     :param bbox: [xmin, xmax, ymin, ymax] x-y coordinate pair array of edges that make up the bounding box of the domain
@@ -85,6 +110,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
     exit = []
     wall = []
 
+    # Look for the mesh output directory, if it cannot find it, make it and move the working directory there
     if not os.path.isdir(os.path.join(os.getcwd(), '../Meshes/')):
         os.mkdir(os.path.join(os.getcwd(), '../Meshes/'))
     os.chdir(os.path.join(os.getcwd(), '../Meshes/'))
@@ -95,13 +121,15 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
             interior_V.append((np.argmin(np.abs(V - interior[i, 0:2]).sum(1)), np.argmin(np.abs(V - interior[i, 2::]).sum(1))))
     interior_V = np.array(interior_V)
 
-    f = open(fname, 'w')
+    f = open(fname +'.gri', 'w')
 
+    # Node writing
     f.write('{0} {1} 2\n'.format(V.shape[0], T.shape[0]))
 
     for node in V:
         f.write('%.15e %.15e\n' % (node[0], node[1]))
 
+    # Looping over the elements to find out where to apply boundary conditions
     for element in T:
         edge1 = np.array([element[0], element[1]])
         edge2 = np.array([element[1], element[2]])
@@ -117,7 +145,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
         Me2 = Ve2.sum(0) / 2
         Me3 = Ve3.sum(0) / 2
 
-        # Check if midpoint x-coordinate is on LHS/RHS
+        # Check if midpoint x-coordinate is on LHS/RHS - LHS -> Inflow, RHS -> Outflow
         if abs(Me1[0] - bbox[0]) < eps: inflow.append([edge1])
         if abs(Me1[0] - bbox[1]) < eps: outflow.append([edge1])
 
@@ -127,7 +155,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
         if abs(Me3[0] - bbox[0]) < eps: inflow.append([edge3])
         if abs(Me3[0] - bbox[1]) < eps: outflow.append([edge3])
 
-        # Check if midpoint y-coordinate is on bottom/top
+        # Check if midpoint y-coordinate is on bottom/top - Bottom -> Inflow, Top -> Outflow
         if abs(Me1[1] - bbox[2]) < eps: inflow.append([edge1])
         if abs(Me1[1] - bbox[3]) < eps: outflow.append([edge1])
 
@@ -145,12 +173,19 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
                 wall.append(edge2)
             if np.abs(edge3 - interior_V).sum(1).min() < eps or np.abs(np.flip(edge3) - interior_V).sum(1).min() < eps:
                 wall.append(edge3)
-        # TODO: Setup (Even if basic) to account for zones that have ATPR (and remove it from outflow)
+
+        # Check if the edge's midpoint is in the "exit" boundary condition for ATPR tracking
+        if exit is not None:
+            # TODO: Setup (Even if basic) to account for zones that have ATPR (and remove it from outflow)
+            pass
 
     # Number of exit BC's depending on what the inputs exist
     num_bc = 2
-    if len(wall) != 0: num_bc += 1
-    if len(exit) != 0: num_bc += 1
+    if len(wall) != 0:
+        num_bc += 1
+    if len(exit) != 0:
+        num_bc += 1
+
     f.write('{0}\n'.format(num_bc))
 
     # Write out internal boundary edges
@@ -175,9 +210,19 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh.gri'):
     # Write out the elements
     f.write('{0} 1 TriLagrange\n'.format(T.shape[0]))
     for element in T:
-        temp_element = geom_gen.reorient_ccw(element[0], element[1], element[2], V)
+        temp_element = geomGen.reorient_ccw(element[0], element[1], element[2], V)
         f.write('{0} {1} {2}\n'.format(temp_element[0] + 1, temp_element[1] + 1, temp_element[2] + 1))
     f.close()
+
+    # Plot the actual mesh for visualization purposes
+    fig = plt.figure(figsize=(12,12))
+    # Plots all the triangles in the mesh in black
+    plt.triplot(V[:,0], V[:,1], T, '-', color='black')
+    plt.axis('equal')
+    plt.tick_params(axis='both', labelsize=12)
+    fig.tight_layout()
+    plt.savefig(fname + '.png', bbox_inches='tight')
+    plt.close(fig)
 
 
 if __name__ == "__main__":

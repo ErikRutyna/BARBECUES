@@ -1,63 +1,93 @@
-import os.path
 from numba import njit
 import numpy as np
+import math
+import os
+
+@njit(cache=True)
+def reorient_ccw(v1, v2, v3, V):
+    """Re-orients the nodes to be in counter-clockwise order.
+
+    :param v1: First node index
+    :param v2: Second node index
+    :param v3: Third node index
+    :param V: [:, 2] x-y coordinate pair array of node positions
+    :returns: Returns a numpy array w/ the same node indices but in CCW order
+    """
+    v1coord = V[v1]
+    v2coord = V[v2]
+    v3coord = V[v3]
+
+    # https://www.geeksforgeeks.org/orientation-3-ordered-points/
+    if ((v2coord[1] - v1coord[1]) * (v3coord[0] - v2coord[0]) -
+        (v3coord[1] - v2coord[1]) * (v2coord[0] - v1coord[0])) < 0:
+        return np.array([v1, v2, v3])
+    else:
+        return np.array([v3, v2, v1])
 
 
 @njit(cache=True)
-def reorient_ccw(node1, node2, node3, node_list):
-    """Re-orients the given set of nodes to be in a counter-clockwise order
+def edgeLengthCalc(node_a, node_b):
+    """Calculates the length of a single edge.
 
-    :param node1: first node index
-    :param node2: second node index
-    :param node3: third node index
-    :param node_list: array of node coordinate pairs
-    :return: Returns a numpy array w/ the same node indices but in CCW order
+    :param node_a: [x, y] coordinates of node A
+    :param node_b: [x, y] coordinates of node B
+    :returns: length: Length of the edge from A->B
     """
-    node1_coord = node_list[node1]
-    node2_coord = node_list[node2]
-    node3_coord = node_list[node3]
+    length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
 
-    # https://www.geeksforgeeks.org/orientation-3-ordered-points/
-    if ((node2_coord[1] - node1_coord[1]) * (node3_coord[0] - node2_coord[0]) - \
-        (node3_coord[1] - node2_coord[1]) * (node2_coord[0] - node1_coord[0])) < 0:
-        return np.array([node1, node2, node3])
-    else:
-        return np.array([node3, node2, node1])
+    return length
 
 
-# TODO: Write this smarter like the airfoil code
+@njit(cache=True)
+def cellQualityCalculator(E, V):
+    """Calculates the average cell quality of a given mesh with E elements and nodes at V positions.
+
+    :param E: [:, 3] Element-2-Node matrix where each row are 3 indices in V, [v1, v2, v3]
+    :param V: [:, 2] x-y coordinates for each node
+    :returns: np.mean(quality): Mean cell quality
+    """
+    quality = np.zeros(E.shape[0])
+    for i in range(E.shape[0]):
+        nodes = E[i]
+        # https://en.wikipedia.org/wiki/Heron%27s_formula
+        a = edgeLengthCalc(V[nodes[0]], V[nodes[1]])
+        b = edgeLengthCalc(V[nodes[1]], V[nodes[2]])
+        c = edgeLengthCalc(V[nodes[2]], V[nodes[0]])
+
+        s = (a + b + c) / 2
+
+        quality[i] = 4 *  math.sqrt(3) * np.sqrt(s * (s - a) * (s - b) * (s - c)) / (a ** 2 + b ** 2 + c ** 2)
+    return np.mean(quality)
+
+
 def sqr_bbox_wall_gen(L, W, ds):
-    """Generates a numpy array that consists of coordinates of cell vertices located along the walls of the bounding box
-    of the computational domain.
+    """Generates a [:, 2] numpy array whose values are points along the edge of an "L x W" rectangle.
 
-    :param L: Length of the computational domain
-    :param W: Width (height in 2D space) of the computational domain
-
-    return: V - [N, 2] x-y coordinate pairs of points that enclose an L x W bounding box with ds step
+    :param L: Unitless length of the computational domain
+    :param W: Unitless width (height in 2D) of the computational domain
+    :param ds: Maximum distance between two adjacent points
+    :returns: V: [:, 2] x-y coordinate pairs that enclose an L x W bounding box with ds step size
     """
-    # Start at [pos, pos] and go clockwise
-    x_L = np.arange(-L / 2, L / 2 + ds, ds)
-    y_L_top = np.ones(x_L.shape[0]) * W / 2
-    y_L_bot = -np.ones(x_L.shape[0]) * W / 2
+    xCoordLeftToRight = np.arange(-L / 2, L / 2 + ds, ds)
+    yCoordTop = np.ones(xCoordLeftToRight.shape[0]) * W / 2
+    yCoordBot = -np.ones(xCoordLeftToRight.shape[0]) * W / 2
 
-    y_w = np.arange(-W / 2, W / 2, ds)
-    x_W_left = -np.ones(y_w.shape[0]) * L / 2
-    x_W_right = np.ones(y_w.shape[0]) * L / 2
+    yCoordBotToTop = np.arange(-W / 2, W / 2, ds)
+    xCoordLeft = -np.ones(yCoordBotToTop.shape[0]) * L / 2
+    xCoordRight = np.ones(yCoordBotToTop.shape[0]) * L / 2
 
-    x_coord = np.hstack((x_L, x_W_right[1::], np.flip(x_L[1::]), x_W_left))
-    y_coord = np.hstack((y_L_top, np.flip(y_w[1::]), y_L_bot[1::], y_w))
+    xCoordinates = np.hstack((xCoordLeftToRight, xCoordRight[1::], np.flip(xCoordLeftToRight[1::]), xCoordLeft))
+    yCoordinates = np.hstack((yCoordTop, np.flip(yCoordBotToTop[1::]), yCoordBot[1::], yCoordBotToTop))
 
-    V = np.array(([x_coord, y_coord])).T
+    V = np.array(([xCoordinates, yCoordinates])).T
     return V
 
 def circle_bbox_wall_gen(r, dtheta):
-    """Generates a numpy array that consists of coordinates of cell vertices for a circle with radius r with segments
-    every dtheta intervals
+    """Generates a [:, 2] numpy array whose values are points along the edge of an "r" sized circle.
 
     :param r: Radius
     :param dtheta: Discretized theta
-
-    return: V - [N, 2] x-y coordinate pairs of points that enclose an L x W bounding box with ds step
+    :returns: V - [:, 2] x-y coordinate pairs that enclose a circle with radius "r" and an arc size of "r*dtheta"
     """
     theta = np.arange(0, 360 + dtheta, dtheta)
     theta = theta[1::] * np.pi / 180
@@ -70,55 +100,56 @@ def circle_bbox_wall_gen(r, dtheta):
 
 
 def diamond_bbox_wall_gen(c, theta, ds):
-    """Generates a [N, 2] numpy array that consists of the diamond shape with chord length c and half-angle theta.
+    """Generates a [:, 2] numpy array that consists of points outlining a diamond shape with chord length c and half
+    angle theta.
 
-    :param c: Straight line chord length from leading edge to trailing edge of the airfoil
-    :param theta: Half-angle of the airfoil
-    :param ds: Distance step sized used for marching down the length of the airfoil
+    :param c: Straight line chord length from leading edge of the diamond to the trailing edge
+    :param theta: Half angle of the diamond, measured from the cord going counter-clockwise
+    :param ds: Unitless distance step sized used for marching down the perimeter of the diamond
+
+    :returns: V - [:, 2] x-y coordinate pairs that make the perimeter of the diamond shape
     """
-
-
-    # Assume center of airfoil is at x-y position of [0, 0]
+    # Assume center of diamond is at x-y position of [0, 0]
     y_max = np.sin(np.deg2rad(theta / 2)) * c / 2
     y_min = -y_max
     x_max = c / 2
     x_min = -x_max
 
-    # Position vectors that go from the leading edge to the trailing edge of
-    # the diamond airfoil
-    le_top_pos_vec = np.array((-x_min, y_min))
+    # Position vectors that go from the leading edge to the trailing edge of the diamond
+    leadingEdgeTopPosVec = np.array((-x_min, y_min))
 
-    # The number of points we want to discretize either the LE or TE of the
-    # airfoil
-    num_points_edge = np.int(np.ceil(np.linalg.norm(le_top_pos_vec) / ds))
+    # The number of points we want to discretize either the LE or TE
+    nPointsEdge = np.int(np.ceil(np.linalg.norm(leadingEdgeTopPosVec) / ds))
 
-    le_top_x_pos = np.linspace(x_min, 0, num_points_edge)
-    le_bot_x_pos = np.linspace(x_min, 0, num_points_edge)
+    leadingEdgeTopX = np.linspace(x_min, 0, nPointsEdge)
+    leadingEdgeBotX = np.linspace(x_min, 0, nPointsEdge)
 
-    te_top_x_pos = np.linspace(0, x_max, num_points_edge)
-    te_bot_x_pos = np.linspace(0, x_max, num_points_edge)
+    trailingEdgeTopX = np.linspace(0, x_max, nPointsEdge)
+    trailingEdgeBotX = np.linspace(0, x_max, nPointsEdge)
 
-    le_top_y_pos = np.linspace(0, y_max, num_points_edge)
-    le_bot_y_pos = np.linspace(0, y_min, num_points_edge)
+    leadingEdgeTopY = np.linspace(0, y_max, nPointsEdge)
+    leadingEdgeBotY = np.linspace(0, y_min, nPointsEdge)
 
-    te_top_y_pos = np.linspace(y_max, 0, num_points_edge)
-    te_bot_y_pos = np.linspace(y_min, 0, num_points_edge)
+    trailingEdgeTopY = np.linspace(y_max, 0, nPointsEdge)
+    trailingEdgeBotY = np.linspace(y_min, 0, nPointsEdge)
 
-    x = np.hstack((le_top_x_pos.flatten()[1::], te_top_x_pos[1::].flatten(), np.flip(te_bot_x_pos)[1::].flatten(), np.flip(le_bot_x_pos)[1::].flatten()))
-    y = np.hstack((le_top_y_pos.flatten()[1::], te_top_y_pos[1::].flatten(), np.flip(te_bot_y_pos)[1::].flatten(), np.flip(le_bot_y_pos)[1::].flatten()))
+    x = np.hstack((leadingEdgeTopX.flatten()[1::], trailingEdgeTopX[1::].flatten(),
+                   np.flip(trailingEdgeBotX)[1::].flatten(), np.flip(leadingEdgeBotX)[1::].flatten()))
+    y = np.hstack((leadingEdgeTopY.flatten()[1::], trailingEdgeTopY[1::].flatten(),
+                   np.flip(trailingEdgeBotY)[1::].flatten(), np.flip(leadingEdgeBotY)[1::].flatten()))
     V = np.array((x, y)).T
     return V
 
 
 def triangle_bbox_wall_gen(p1, p2, p3, ds):
-    """Generates a [N, 2] numpy array that consists of the points that generate a triangle defined by vertices p1, p2,
-    and p3.
+    """Generates a [:, 2] numpy array whose values are points along the edge of a triangle are made up of the x-y
+    vertices "p1", "p2", "p3".
 
     :param p1: Vertex with points [x, y]
     :param p2: Vertex with points [x, y]
     :param p3: Vertex with points [x, y]
     :param ds: Distance step sized used for discretizing down the lengths between two vertices.
-    :return V: nodes that make the triangle
+    :returns: V - [:, 2] x-y coordinate pairs that enclose a triangle with points "p1", "p2", and "p3"
     """
 
     # Position vectors
@@ -152,23 +183,25 @@ def triangle_bbox_wall_gen(p1, p2, p3, ds):
 
 
 def csv_bbox_Wall_gen(fname):
-    """ Reads a *.csv file that has nodes in Nx2: x,y -like position and turns
-    this into a set of nodes for bounding box geometry
+    """Reads a *.csv file that has nodes in Nx2: x,y -like position and turns this into a set of nodes for bounding
+    box geometry.
 
     :param fname: Filename under Meshes directory
-    :return V: [N, 2] array of nodes in x-y form
+    :returns: V - [:, 2] x-y coordinate pairs from the fname csv file
     """
-    V = np.genfromtxt(os.path.dirname(os.getcwd()) + '\Meshes\\' + fname,
-                   dtype=np.double, delimiter=',')
-
+    V = np.genfromtxt(os.path.dirname(os.getcwd()) + '\Meshes\\' + fname, dtype=np.double, delimiter=',')
     return V
 
 
 def internal_walls(wall_points, looped):
-    """Returns an [N, 4] array of x-y coordinates that make up each edge for a given path of edges.
+    """Returns an array of [:, 4] x-y coordinates that make up each edge for a given path of edges. Each row of the
+    array consists of [x1, y1, x2, y2] for where [x1, y1] refer to the first point in a line segment of the edge for the
+    given path of edges, and [x2, y2] consist of the second point in the line segment of the edge for the given path
+    of edges.
 
-    :param wall_points: [N, 2] array of x-y coordinate pairs that make up the nodes for all edges
+    :param wall_points: [:, 2] array of x-y coordinate pairs that make up the nodes for all edges
     :param looped: Boolean - True for when the wall loops back from the point to the first, false if the wall does not
+    :returns: [:, 4] x-y coordinates in the form described.
     """
     wall_edges = []
     for i in range(wall_points.shape[0]):

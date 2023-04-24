@@ -1,4 +1,4 @@
-# B.A.R.B.E.C.U.E.S. V1.3.1
+# B.A.R.B.E.C.U.E.S. & GRILS V1.4.0
 B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible 
 Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the
 compressible Euler equations. The code is meant to be a testing ground for 
@@ -9,7 +9,7 @@ More information about such features can be found in the Wiki (implemented
 and an example can be found in the source code. 
 
 The solver also has another utility that can be used to generate meshes called
-the G.R.I.L.S Mesher (*.gri Level Set Mesher). The mesher  is similar in 
+the G.R.I.L.S Mesher (*.GRI Level Set Mesher). The mesher  is similar in 
 architecture to the DistMesh (in that it runs the core underlying level-set 
 based method for producing high quality meshes), but has some of its own 
 features and changes. Some examples of how to use GRIFT can be seen in 
@@ -63,20 +63,24 @@ you need a minimum of one of the following ASCs:
 
 
 ## Initialization Methods
-There are 4 unique initialization methods and 1 sub-method for initializing the
-state variables in the cells of the domain.
+There are 3 unique initialization methods for initializing the state variables in 
+the cells of the domain.
 
-| Init Method | Effect                                                                                                                                                                                                                                                                  |
-|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| freestream  | All cells have freestream initial condition.                                                                                                                                                                                                                            |
-| weak        | The freestream Mach number is halved and then the freestream <br/> initial condition is applied.                                                                                                                                                                        |
-| linear      | Uses a linear scaling function to scale the freestream Mach <br/> number based on each cell's centroid coordinate location.                                                                                                                                             |
-| exp         | Uses an exponential scaling function to scale the freestream <br/> Mach number based on each cell's centroid coordinate location.                                                                                                                                       |
-| moc         | Propagates characteristic lines from the inflow and reflects <br/> them off of the inviscid walls. Uses aforementioned reflections in order to create zones for oblique shock trains which can scale Mach number down according to the location within the shock train. |
+| Initialization Method | Effect                                                                                                                                                                                                                                                                  |
+|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| freestream            | All cells have freestream initial condition.                                                                                                                                                                                                                            |
+| sdf                   | The Mach number is scaled via the minimum signed distance value to all internal walls and then that Mach number is used to compute the freestream state.                                                                                                                |
+| moc                   | Propagates characteristic lines from the inflow and reflects <br/> them off of the inviscid walls. Uses aforementioned reflections in order to create zones for oblique shock trains which can scale Mach number down according to the location within the shock train. |
 
 
 # Changelog
-V 1.3.1.1 Small change to flux.py to avoid extra computations resulting in 
+V1.4.0 GRILS Mesher has had its documentation updated and and default values optimized using particle swarm 
+optimization. All the things I wished to accomplish with GRILS have been done and it will be moving into a finished 
+state. V1.5.0 will contain a manual with in-depth information regarding the program, configurations, examples, and 
+information regarding its optimization process. Old initialization methods have been depreciated and removed, the only 
+two remaining methods are the "freestream", "sdf", and "moc" based methods. 
+
+V1.3.1.1 Small change to flux.py to avoid extra computations resulting in 
 ~4.5% increase in solver speed. Also fixed *.out files using the wrong value
 for the pressure drag when computing approximated total drag.
 

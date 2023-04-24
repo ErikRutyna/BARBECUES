@@ -1,37 +1,38 @@
-import copy
-import numpy as np
+import geometry_generation as geomGen
+import matplotlib.pyplot as plt
 from scipy import spatial as sp
 from scipy import sparse as spa
 from numba import njit
+import numpy as np
+import copy
+import os
 
 
-def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-3, dptol=1e-3):
-    """Runs my version of DistMesh in 2D that is implemented for the generic shapes domain. Code is meant to be similar
-    in architecture/algorithm to actual DistMesh for debugging and usability purposes. Only difference is that each
-    DistMesh function has its own created distance function as I don't know how to do MATLAB style inline functions in
-    Python. We also make a small change to the code provided online in that this code always assumes a uniform
-    distribution of cells - no local area refinement as the solver as AMR.
-
-    :param anon_sdf: Anonymous SDF function - but in Python this is a lambda function (anon_sdf = lambda p: dpoly(...)
+def distmesh2d(sdf, h, bound_box, fixed_points, k=9.61377755e-02, Fscale=1.58554652, maxIterations=105):
+    """Runs a modified version of the DistMesh level-set meshing algorithm. This version of DistMesh has been optimized
+    with PySwarms in an effort to minimize the number of iterations to produce a high quality mesh for any given 2D
+    geometry.
+    
+    :param sdf: Anonymous SDF function - this is a lambda function (sdf = lambda p: dpoly(...))
     :param h: Desired edge length in unitless length
     :param bound_box: Bounding box of domain (edges of the computational domain) [xmin, xmax, ymin, ymax]
     :param fixed_points: Fixed points of domain that are to not be moved
     :param k: Bar stiffness coefficient, defaults to 0.2
     :param Fscale: Scaling factor for bar length force adjustments, defaults to 1.5
-    :param dptol: Re-triangulation update tolerance, defaults to 1e-3
-    :param ttol: RMS of bar forces residual, must be less than this to exit mesh generation, defaults to 1e-3
+    :param maxIterations: Maximum number of iterations to produce a high quality mesh, defaults to 1000
 
-    :return: V, T (Vertices [N, 2] x-y coordinate pairs, and triangles [N, 3] of V indices)
+    :returns: V, T ([:, 2] x-y coordinate pairs, [:, 3] array of indices in V)
     """
     # Termination/Control numbers
     geps = 1e-3 * h
+    dptol = 1e-3
     deps = np.sqrt(np.spacing(1)) * h
 
     # Bounding box information
     xmin, xmax, ymin, ymax = bound_box
 
     # Part 1. - Creating initial point distribution using equilateral triangles
-    x, y = np.mgrid[(xmin):(xmax+h):h, (ymin+h):(ymax+h*np.sqrt(3)/2):(h*np.sqrt(3)/2)]
+    x, y = np.mgrid[xmin:(xmax+h):h, (ymin+h):(ymax+h*np.sqrt(3)/2):(h*np.sqrt(3)/2)]
 
     # Shift every other row to help with point distribution
     x[:, 1::2] += h/2
@@ -40,7 +41,7 @@ def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-
     V = np.vstack((x.flat, y.flat)).T
 
     # Part 2. - Removing out of bounds points and adding in the fixed points
-    V = V[anon_sdf(V) < geps]
+    V = V[sdf(V) < geps]
 
     # Removed the fixed points if they're in V
     V = setdiff_rows(V, fixed_points)
@@ -53,47 +54,55 @@ def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-
 
     # Part 3. - Triangulation via Delaunay and spring-force projection
     oldV = np.Inf
-    counter = 0
-    while True:
-        counter += 1
+    energyResiduals = []
+    averageCellQuality = []
+    for i in range(maxIterations):
         dist = lambda Vnew, Vold: np.sqrt(((Vnew - Vold)**2).sum(1))
-        # Check for "large" movement by checking relative change of nodes from one cycle to next
+        # Check for large movements in node pairs by evaluating position changes from one cycle to the next
         if (dist(V, oldV)/h).max() > dptol:
+            # If there is a large movement, store the current node positions and re-triangulate the mesh
             oldV = copy.deepcopy(V)
+
             # Compute our new triangles
             T = (sp.Delaunay(V)).simplices
 
-            # Reject triangles that have centroids outside of the domain
-            Tmid = V[T].sum(1) / 3
-            T = T[anon_sdf(Tmid) < - geps]
+            # Reject triangles that have centroids outside the domain
+            Tmidpoints = V[T].sum(1) / 3
+            T = T[sdf(Tmidpoints) < - geps]
 
             # Part 4. - Create edges of each triangle, make them unique, and then sort them
-            edges = np.vstack((T[:, 0:2], T[:, 1::], T[:, 0::2]))
-            edges = np.unique(np.squeeze(edges).reshape(-1, np.squeeze(edges).shape[-1]), axis=0)
-            edges.sort(axis=1)
+            edgeNodePairsWithDupes = np.vstack((T[:, 0:2], T[:, 1::], T[:, 0::2]))
+            edgeNodePairsWithDupes = np.unique(np.squeeze(edgeNodePairsWithDupes).
+                                               reshape(-1, np.squeeze(edgeNodePairsWithDupes).shape[-1]), axis=0)
+            edgeNodePairsWithDupes.sort(axis=1)
+
             # Further cleaning to remove duplicates where [1, 2] == [2, 1]
-            cleaned_edges = np.empty((0, 2), dtype=int)
-            for edge in edges:
+            edgeNodePairs = np.empty((0, 2), dtype=int)
+            for edge in edgeNodePairsWithDupes:
                 rev_edge = np.array([edge[1], edge[0]])
-                if np.any(np.logical_and(np.equal(cleaned_edges[:, 0], edge[0]), np.equal(cleaned_edges[:, 1], edge[1])))\
-                or np.any(np.logical_and(np.equal(cleaned_edges[:, 0], rev_edge[0]), np.equal(cleaned_edges[:, 1], rev_edge[1]))): continue
-                cleaned_edges = np.vstack((cleaned_edges, edge))
+                if np.any(np.logical_and(np.equal(edgeNodePairs[:, 0], edge[0]),
+                                         np.equal(edgeNodePairs[:, 1], edge[1])))\
+                or np.any(np.logical_and(np.equal(edgeNodePairs[:, 0], rev_edge[0]),
+                                         np.equal(edgeNodePairs[:, 1], rev_edge[1]))):
+                    continue
+                edgeNodePairs = np.vstack((edgeNodePairs, edge))
+
         # Part 5. - Move the mesh points based on their bar lengths and forces
         # Current edge information
-        edge_vec = V[cleaned_edges[:, 0], :] - V[cleaned_edges[:, 1], :]
-        edge_L = np.sqrt(np.sum(edge_vec ** 2, axis=1))
+        edgeVectors = V[edgeNodePairs[:, 0], :] - V[edgeNodePairs[:, 1], :]
+        edgeLengths = np.sqrt(np.sum(edgeVectors ** 2, axis=1))
 
         # Desired length for each triangle
-        edge_L_W = np.ones((cleaned_edges.shape[0])) * Fscale * \
-                   np.sqrt(np.sum(np.power(edge_L, 2)) / cleaned_edges.shape[0])
+        edgeLengthsWanted = np.ones((edgeNodePairs.shape[0])) * Fscale * \
+                   np.sqrt(np.sum(np.power(edgeLengths, 2)) / edgeNodePairs.shape[0])
 
         # Force to move each edge
-        F = edge_L_W - edge_L
+        F = edgeLengthsWanted - edgeLengths
         F[F < 0] = 0
-        F_vectorized = (F[:, None] / edge_L[:, None]).dot([[1, 1]]) * edge_vec
+        F_vectorized = (F[:, None] / edgeLengths[:, None]).dot([[1, 1]]) * edgeVectors
 
-        I = cleaned_edges[:, [0, 0, 1, 1]].flatten()
-        J = np.repeat([[0, 1, 0, 1]], cleaned_edges.shape[0], axis=0).flatten()
+        I = edgeNodePairs[:, [0, 0, 1, 1]].flatten()
+        J = np.repeat([[0, 1, 0, 1]], edgeNodePairs.shape[0], axis=0).flatten()
         S = np.stack((F_vectorized, -F_vectorized), axis=1).flatten()
         Ftot = dense(I, J, S, shape=(V.shape[0], 2))
         # Account for the fixed nodes that don't have forces applied
@@ -103,36 +112,207 @@ def distmesh2d(anon_sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, ttol=1e-
         V += k * Ftot
 
         # Part 6. - Projecting points outside the boundary to the boundary/inside
-        p = anon_sdf(V)
+        p = sdf(V)
         if (p>0).any():
-            gradx = (anon_sdf(V[p>1e-6]+[deps, 0]) - p[p>1e-6]) / deps
-            grady = (anon_sdf(V[p>1e-6]+[0, deps]) - p[p>1e-6]) / deps
+            gradx = (sdf(V[p > 1e-6] + [deps, 0]) - p[p > 1e-6]) / deps
+            grady = (sdf(V[p > 1e-6] + [0, deps]) - p[p > 1e-6]) / deps
             grad_tot = gradx ** 2 + grady ** 2
             V[p>1e-6] -= (p[p>1e-6] * np.vstack((gradx, grady))/grad_tot).T
 
-        if counter % 10 == 0:
-            print('Mesh Iteration #: {0} \t Meshing Energy Residual {1}'.format(counter, (np.sqrt((k * Ftot[p<-geps]**2).sum(1))/h).max()))
+        # After point projection compute the new edges and their lengths
+        updatedEdgeVectors = V[edgeNodePairs[:, 0], :] - V[edgeNodePairs[:, 1], :]
+        updatedEdgeLengths = np.sqrt(np.sum(updatedEdgeVectors ** 2, axis=1))
+        # Elastic Potential Energy =  1/2 * k * x**2, if this is zero then all edge lengths are at desired length
+        energyResidual = (0.5 * k * (updatedEdgeLengths - edgeLengthsWanted) ** 2).sum()
+        energyResiduals.append(energyResidual)
+
+        # Track the average cell quality across the mesh
+        averageCellQuality.append(geomGen.cellQualityCalculator(T, V))
+
+        # Printout for observation
+        if i % 10 == 0:
+            print('Mesh Iteration #: {0} \t Meshing Energy Residual: {1} \t Average Cell Quality: {2}'
+                  .format(i, energyResiduals[-1], averageCellQuality[-1]))
 
         # Part 7. - Termination condition: All nodes that had to be moved didn't move that much
-        # TODO: Plot this residual as a function of iteration # and have title show inputs/nodes #/cells #
-        # TODO: Add the counter/residual amount as an exit condition
-        if counter > 50 or (np.sqrt((k * Ftot[p<-geps]**2).sum(1))/h).max() < ttol:
+        if energyResidual <= 1e-8:
             break
-    print('Number of iterations to make a good mesh: {0}'.format(counter))
+
+    # Part 8. - Plot the energy residuals and average cell quality as a function of iteration and the mesh itself
+    currentDir = os.getcwd()
+
+    # Add the Output dir if it doesn't exist and swap to it
+    if not os.path.isdir(os.path.join(os.getcwd(), '../Output/')):
+        os.mkdir(os.path.join(os.getcwd(), '../Output/'))
+    os.chdir(os.path.join(os.getcwd(), '../Output/'))
+
+    # Plot the energy residuals and average cell quality at each iteration cycle
+    f = plt.figure(figsize=(12, 12))
+    plt.title('Energy Residual: {0}, N_V = {1}, N_T = {2}'.
+              format(energyResiduals[-1], V.shape[0], T.shape[0]))
+    plt.plot(range(i+1), energyResiduals, color='r')
+    plt.xlabel('Iteration Number')
+    plt.ylabel('Energy Residual')
+    plt.ylim(0, max(energyResiduals))
+    plt.xlim(0, i)
+    plt.tick_params(axis='both', labelsize=12)
+    plt.savefig('energy_residuals.png', bbox_inches='tight')
+
+    plt.clf()
+
+    plt.title('Average Cell Quality: {0}, N_V = {1}, N_T = {2}'.
+              format(averageCellQuality[-1], V.shape[0], T.shape[0]))
+    plt.plot(range(i+1), averageCellQuality, color='r')
+    plt.xlabel('Iteration Number')
+    plt.ylabel('Average Cell Quality')
+    plt.ylim(0, 1)
+    plt.xlim(0, i)
+    plt.tick_params(axis='both', labelsize=12)
+    plt.savefig('average_cell_quality.png', bbox_inches='tight')
+    plt.close('all')
+
+    # Swap back to original working directory
+    os.chdir(currentDir)
+
+    print('Meshing Complete - Please view ../Output/ for information and visualization of the mesh.')
     return V, T
 
 
-# TODO: Combine wnpoly and isLeft into a single function for speed
-@njit(cache=True)
-def wn_PnPoly(V, p):
-    """ Performs the wining test for a point in a polygon using the Dan Sunday
-    algorithm:
-    https://web.archive.org/web/20130126163405/ ...
-    http://geomalgorithms.com/a03-_inclusion.html#wn_PnPoly()
+def distmesh2d_optimize(sdf, h, bound_box, fixed_points, k=0.2, Fscale=1.5, maxIterations=1000):
+    """A modified version of distmesh that can be used with optimization methods to minimize the number of iterations
+    required to make a good mesh by maximizing cell quality and minimizing the energy residual..
 
-    :param V: [N, 2] array of x-y points that make up the polygon
-    :param p: x-y point tested if it is in the polygon denoted by vertices V
-    :return: wn_counter - if wn != 0 then the point p exists in the polygon
+    :param sdf: Anonymous SDF function - this is a lambda function (sdf = lambda p: dpoly(...))
+    :param h: Desired edge length in unitless length
+    :param bound_box: Bounding box of domain (edges of the computational domain) [xmin, xmax, ymin, ymax]
+    :param fixed_points: Fixed points of domain that are to not be moved
+    :param k: Bar stiffness coefficient, defaults to 0.2
+    :param Fscale: Scaling factor for bar length force adjustments, defaults to 1.5
+    :param maxIterations: Maximum number of iterations to produce a high quality mesh, defaults to 1000
+
+    :returns: V, T ([:, 2] x-y coordinate pairs, [:, 3] array of indices in V)
+    """
+    # Termination/Control numbers
+    geps = 1e-3 * h
+    dptol = 1e-3
+    deps = np.sqrt(np.spacing(1)) * h
+
+    # Bounding box information
+    xmin, xmax, ymin, ymax = bound_box
+
+    # Part 1. - Creating initial point distribution using equilateral triangles
+    x, y = np.mgrid[xmin:(xmax+h):h, (ymin+h):(ymax+h*np.sqrt(3)/2):(h*np.sqrt(3)/2)]
+
+    # Shift every other row to help with point distribution
+    x[:, 1::2] += h/2
+
+    # Create [N, 2] arrays of points
+    V = np.vstack((x.flat, y.flat)).T
+
+    # Part 2. - Removing out of bounds points and adding in the fixed points
+    V = V[sdf(V) < geps]
+
+    # Removed the fixed points if they're in V
+    V = setdiff_rows(V, fixed_points)
+
+    # Add the fixed points back into V
+    V = np.vstack((fixed_points, V))
+
+    # Also count number of fixed points we have - need to know index to avoid moving the fixed points later on
+    n_fixed = fixed_points.shape[0]
+
+    # Part 3. - Triangulation via Delaunay and spring-force projection
+    oldV = np.Inf
+    energyResiduals = []
+    averageCellQuality = []
+    for i in range(maxIterations):
+        dist = lambda Vnew, Vold: np.sqrt(((Vnew - Vold)**2).sum(1))
+        # Check for large movements in node pairs by evaluating position changes from one cycle to the next
+        if (dist(V, oldV)/h).max() > dptol:
+            # If there is a large movement, store the current node positions and re-triangulate the mesh
+            oldV = copy.deepcopy(V)
+
+            # Compute our new triangles
+            T = (sp.Delaunay(V)).simplices
+
+            # Reject triangles that have centroids outside the domain
+            Tmidpoints = V[T].sum(1) / 3
+            T = T[sdf(Tmidpoints) < - geps]
+
+            # Part 4. - Create edges of each triangle, make them unique, and then sort them
+            edgeNodePairsWithDupes = np.vstack((T[:, 0:2], T[:, 1::], T[:, 0::2]))
+            edgeNodePairsWithDupes = np.unique(np.squeeze(edgeNodePairsWithDupes).
+                                               reshape(-1, np.squeeze(edgeNodePairsWithDupes).shape[-1]), axis=0)
+            edgeNodePairsWithDupes.sort(axis=1)
+
+            # Further cleaning to remove duplicates where [1, 2] == [2, 1]
+            edgeNodePairs = np.empty((0, 2), dtype=int)
+            for edge in edgeNodePairsWithDupes:
+                rev_edge = np.array([edge[1], edge[0]])
+                if np.any(np.logical_and(np.equal(edgeNodePairs[:, 0], edge[0]),
+                                         np.equal(edgeNodePairs[:, 1], edge[1])))\
+                or np.any(np.logical_and(np.equal(edgeNodePairs[:, 0], rev_edge[0]),
+                                         np.equal(edgeNodePairs[:, 1], rev_edge[1]))):
+                    continue
+                edgeNodePairs = np.vstack((edgeNodePairs, edge))
+
+        # Part 5. - Move the mesh points based on their bar lengths and forces
+        # Current edge information
+        edgeVectors = V[edgeNodePairs[:, 0], :] - V[edgeNodePairs[:, 1], :]
+        edgeLengths = np.sqrt(np.sum(edgeVectors ** 2, axis=1))
+
+        # Desired length for each triangle
+        edgeLengthsWanted = np.ones((edgeNodePairs.shape[0])) * Fscale * \
+                   np.sqrt(np.sum(np.power(edgeLengths, 2)) / edgeNodePairs.shape[0])
+
+        # Force to move each edge
+        F = edgeLengthsWanted - edgeLengths
+        F[F < 0] = 0
+        F_vectorized = (F[:, None] / edgeLengths[:, None]).dot([[1, 1]]) * edgeVectors
+
+        I = edgeNodePairs[:, [0, 0, 1, 1]].flatten()
+        J = np.repeat([[0, 1, 0, 1]], edgeNodePairs.shape[0], axis=0).flatten()
+        S = np.stack((F_vectorized, -F_vectorized), axis=1).flatten()
+        Ftot = dense(I, J, S, shape=(V.shape[0], 2))
+        # Account for the fixed nodes that don't have forces applied
+        Ftot[0:n_fixed] = 0
+
+        # Move the nodes by a scaled version of the force
+        V += k * Ftot
+
+        # Part 6. - Projecting points outside the boundary to the boundary/inside
+        p = sdf(V)
+        if (p>0).any():
+            gradx = (sdf(V[p > 1e-6] + [deps, 0]) - p[p > 1e-6]) / deps
+            grady = (sdf(V[p > 1e-6] + [0, deps]) - p[p > 1e-6]) / deps
+            grad_tot = gradx ** 2 + grady ** 2
+            V[p>1e-6] -= (p[p>1e-6] * np.vstack((gradx, grady))/grad_tot).T
+
+        # After point projection compute the new edges and their lengths
+        updatedEdgeVectors = V[edgeNodePairs[:, 0], :] - V[edgeNodePairs[:, 1], :]
+        updatedEdgeLengths = np.sqrt(np.sum(updatedEdgeVectors ** 2, axis=1))
+        # Elastic Potential Energy =  1/2 * k * x**2, if this is zero then all edge lengths are at desired length
+        energyResidual = (0.5 * k * (updatedEdgeLengths - edgeLengthsWanted) ** 2).sum()
+        energyResiduals.append(energyResidual)
+
+        # Track the average cell quality across the mesh
+        averageCellQuality.append(geomGen.cellQualityCalculator(T, V))
+
+        # Part 7. - Termination condition: All nodes that had to be moved didn't move that much
+        if energyResidual <= 1e-8:
+            break
+
+    return energyResiduals[-1], averageCellQuality[-1], i
+
+
+@njit(cache=True)
+def pnpoly(V, p):
+    """Performs the winding test for a point in a polygon using the Dan Sunday algorithm:
+    https://web.archive.org/web/20130126163405/http://geomalgorithms.com/a03-_inclusion.html#wn_PnPoly()
+
+    :param V: [:, 2] array of x-y points that are the vertices of the polygon
+    :param p: x-y coordinates of point to be tested if it is inside the polygon
+    :returns: wn_counter - if wn != 0 then the point p exists in the polygon
     """
     v_stack = np.empty((1,2))
     v_stack[0, 0] = V[0, 0]
@@ -143,37 +323,36 @@ def wn_PnPoly(V, p):
     for i in range(V.shape[0]):
         if closed_V[i, 1] <= p[1]:
             if closed_V[i+1, 1] > p[1]:
-                if isLeft(closed_V[i], closed_V[i+1], p) >= 0:
+                if isleft(closed_V[i], closed_V[i + 1], p) >= 0:
                     wn += 1
         else:
             if closed_V[i+1, 1] <= p[1]:
-                if isLeft(closed_V[i], closed_V[i+1], p) < 0:
+                if isleft(closed_V[i], closed_V[i + 1], p) < 0:
                     wn -= 1
     return wn
 
 
 @njit(cache=True)
-def isLeft(P0, P1, P2):
-    """ Checks whether or not point x-y point p is left or right of a line
-    that passes through x-y points V1 -> V2
+def isleft(P0, P1, P2):
+    """Checks whether x-y point P2 is left or right of a line that passes through x-y points P0 -> P1
 
-    :param P0: First point of line in x-y form
-    :param P1: Second point of line in x-y form
-    :param P2: point to be checked in x-y coordinate pair
-    :return: True if point is left, False if it is now
+    :param P0: x-y coordinate of start of line segment
+    :param P1: x-y coordinate of end of line segment
+    :param P2: x-y coordinate of point to be tested
+    :returns: True if point is left, False if it is now
     """
-    return (P1[0] - P0[0]) * (P2[1] - P0[1]) - \
-           (P2[0] - P0[0]) * (P1[1] - P0[1])
-
+    return (P1[0] - P0[0]) * (P2[1] - P0[1]) - (P2[0] - P0[0]) * (P1[1] - P0[1])
 
 
 @njit(cache=True)
 def dpoly(V, p):
-    """Signed distance function for "p" points with respect to a generic polygon made up by connecting "V" vertices in a
-     closed path
+    """A signed distance function that for a returns the minimum signed distance value for "p" points for a polygon with
+     "V" vertices.
 
-    :param V: Vertices of the polygon given [N, 2] x-y coordinate pair array
-    :param p: Points of the domain given [N, 2] x-y coordinate pair array
+    :param V: [:, 2] x-y coordinate pair array of the vertices of a convex closed polygon
+    :param p: [:, 2] x-y coordinate pair array of points in the domain
+    :returns: poly_sdf: Minimum value signed distance function value for points "p" with regard to a convex polygon made
+    up by vertices "V"
     """
     # Compute all the line segment pairs
     a = np.zeros((V.shape[0], 2))
@@ -192,21 +371,22 @@ def dpoly(V, p):
             a[i, :] = V[i, :]
             b[i, :] = V[i + 1, :]
 
-    # TODO: See comment about combining to remove this loop
-    booleanmatrix = np.zeros(p.shape[0])
+    inPoly = np.zeros(p.shape[0])
     for i in range(p.shape[0]):
-        booleanmatrix[i] = wn_PnPoly(V, p[i])
+        inPoly[i] = pnpoly(V, p[i])
 
-    poly_sdf = (-1) ** booleanmatrix * sdf_segment(a, b, p)
+    poly_sdf = (-1) ** inPoly * sdf_segment(a, b, p)
     return poly_sdf
 
 @njit(cache=True)
 def sdf_segment(a, b, p):
-    """Signed distance function for a line segments made up of points [a, b]. It computes the distances
+    """Signed distance function for line segments made up of points [a, b]. The function returns  the minimum signed
+    distance of each point in "p" to any of the possible line segments ([a, b]).
 
-    :param a: Starting position of each line segment, [x, y]
-    :param b: Ending position of each line segment, [x, y]
-    :param p: All points in the domain [N, 2], x-y coordinate pair array
+    :param a: [:, 2] x-y coordinate pair array of starting position of line segments
+    :param b: [:, 2] x-y coordinate pair array of ending position of line segments
+    :param p: [:, 2] x-y coordinate pair array of points in the domain
+    :returns: sdf_min: Minimum value of the line segment SDF function at each point p to any line segments ([a, b])
     """
     sdf_min = np.zeros(p.shape[0])
     # Now for every line segment and every point in the domain, compute the signed distance function
@@ -219,18 +399,18 @@ def sdf_segment(a, b, p):
     return sdf_min
 
 def ddiff(d1, d2):
-    """ Signed distance function to find the difference between two regions described by the specific distance functions
-    d1 and d2.
+    """This signed distance function returns the boolean intersection between two other signed distance functions. It
+    can be used to effectively "cut" one polygon out of another.
 
     :param d1: Distance function for the encompassing polygon
-    :param d2: Distance function for the internal polygon
+    :param d2: Distance function for the internal polygon (polygon to be removed)
+    :returns: diff: Boolean intersection of the two sdf functions "d1" and "d2"
     """
-    diff = np.vstack((d1, -d2)).max(0)
+    diff = np.vstack((d1, -d2)).max(axis=0)
     return diff
 
 
-# MATLAB compatability utility borrowed from:
-# https://github.com/bfroehle/pydistmesh/blob/master/distmesh/mlcompat.py
+# MATLAB compatability utility borrowed from: https://github.com/bfroehle/pydistmesh/blob/master/distmesh/mlcompat.py
 def dense(I, J, S, shape=None, dtype=None):
     """
     Similar to MATLAB's SPARSE(I, J, S, ...), but instead returning a dense array.
@@ -251,15 +431,16 @@ def dense(I, J, S, shape=None, dtype=None):
         S.fill(x)
 
     # Turn these into 1-d arrays for processing.
-    S = S.flat; I = I.flat; J = J.flat
+    S = S.flat
+    I = I.flat
+    J = J.flat
     return spa.coo_matrix((S, (I, J)), shape, dtype).toarray()
 
 
 def setdiff_rows(A, B, return_index=False):
     """
-    Similar to MATLAB's setdiff(A, B, 'rows'), this returns C, I
-    where C are the row of A that are not in B and I satisfies
-    C = A[I,:].
+    Similar to MATLAB's setdiff(A, B, 'rows'), this returns C, and I were C is the rows of A that are not in B and I
+    satisfies C = A[I,:].
     Returns I if return_index is True.
     """
     A = np.require(A, requirements='C')
@@ -308,13 +489,13 @@ def unique_rows(A, return_index=False, return_inverse=False):
     B = B.view(orig_dtype).reshape((-1, ncolumns), order='C')
 
     # There must be a better way to do this:
-    if (return_index):
-        if (return_inverse):
+    if return_index:
+        if return_inverse:
             return B, I, J
         else:
             return B, I
     else:
-        if (return_inverse):
+        if return_inverse:
             return B, J
         else:
             return B
