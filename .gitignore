@@ -10,4 +10,4 @@ GRILS/optimize_distmesh.py
 BARBECUES/__pycache__
 .idea/*
 git_commands.txt
-Solver/solver.prof
+solver.prof
