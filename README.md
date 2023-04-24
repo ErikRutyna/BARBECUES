@@ -56,9 +56,9 @@ you need a minimum of one of the following ASCs:
 
 | ASC                                                           | Flag Number |
 |---------------------------------------------------------------|-------------|
-| Drag Coefficient $$(C_D)$$                                    | 0           |
+| Drag Coefficient $(C_D)$                                      | 0           |
 | Lift Coefficient $(C_L)$                                      | 1           |
-| Pitching Moment Coefficient $(C_MX)$                          | 2           |
+| Pitching Moment Coefficient $(C_{MX})$                        | 2           |
 | Average Total Pressure Recovery Factor (@ (Supersonic) Exits) | 3           |
 
 
