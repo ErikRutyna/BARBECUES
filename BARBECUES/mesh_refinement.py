@@ -1,10 +1,11 @@
 import cell_geometry_formulas as cgf
-import numpy as np
-import math
-import readgri
-import flux
 from numba import njit
+import numpy as np
+import readgri
 import helper
+import math
+import flux
+
 
 
 @njit(cache=True)
@@ -22,7 +23,7 @@ def reorient_ccw(node1, node2, node3, node_list):
     node3_coord = node_list[node3]
 
     # https://www.geeksforgeeks.org/orientation-3-ordered-points/
-    if ((node2_coord[1] - node1_coord[1]) * (node3_coord[0] - node2_coord[0]) - \
+    if ((node2_coord[1] - node1_coord[1]) * (node3_coord[0] - node2_coord[0]) -
         (node3_coord[1] - node2_coord[1]) * (node2_coord[0] - node1_coord[0])) < 0:
         return np.array([node1, node2, node3])
     else:
@@ -34,12 +35,13 @@ def refine_interp_uniform(mesh, state, y, f, fname):
     number across cell boundaries. Divides flagged cells uniformly, cells w/ >= 2 neighbors flagged uniformly, and cells
     with only 1 edge flagged.
 
-    :param mesh: Mesh of the domain
-    :param state: Nx4 state vector
+    :param mesh: Mesh dictionary {'E', 'V', 'IE', 'BE', 'Bname'}
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
     :param y: Ratio of specific heats - gamma
     :param f: Fraction of cells to be refined
     :param fname: Filename that the newly saved mesh is saved as
-    :return:
+    :returns: mesh - Newly refined mesh in same dictionary format as the input, state - New state vector array
+    interpolated on the new mesh
     """
     flag_cell, split_cell, flag_be, flag_ie, split_be, split_ie = find_uniform_splitting(state, mesh, y, f)
 
@@ -167,14 +169,17 @@ def find_uniform_splitting(state, mesh, y, f):
     that has 2 uniform neighbors becomes a uniform cell, this process continues until either all cells are uniform or
     a cell no longer has 2 uniform neighbors and can be split in two.
 
-    :param state: Nx4 numpy array of state vectors
-    :param mesh: Current working mesh
-    :return: array of flagged cell indices, array of split cell indices, array of flagged be, array of flagged ie
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
+    :param mesh: Mesh dictionary {'E', 'V', 'IE', 'BE', 'Bname'}
+    :param y: Ratio of specific heats of the working fluid, gamma
+    :param f: Percent fraction of cells to originally refine
+    :returns: Array of flagged cell indices, array of split cell indices, array of flagged be, array of flagged ie
     """
     # Nx2 array [error, cell i]
     error_index_ie = np.zeros((len(mesh['IE']), 2))
     error_index_be = np.zeros((len(mesh['BE']), 2))
 
+    # Error defined as jumps in Mach number scaled by cell edge
     for i in range(len(mesh['BE'])):
         # Boundary Edges
         be = mesh['BE'][i]
@@ -266,7 +271,7 @@ def find_uniform_splitting(state, mesh, y, f):
     flagged_ie = np.delete(flagged_ie, 0, axis=0)
 
     checking_neighbors = True
-    while (checking_neighbors):
+    while checking_neighbors:
         num_flagged_edges = np.zeros((mesh['E'].shape[0]), dtype=int)
         for i in range(mesh['E'].shape[0]):
             if i in flagged_cells: continue
@@ -316,13 +321,14 @@ def find_flagged_edges(state, E, V, IE, BE, f, y):
     """Finds the flagged edges and flags cells and then generates a Cell-to-Edge matrix of what edges of each cell need
     to be refined to fit the 1-2-3 flagged refinement pattern.
 
-    :param state: State vector array
-    :param E: Element-2-Node matrix
-    :param V: Coordinates of nodes
+    :param state: [:, 4] Numpy array of state vectors, each row is 1 cell's state [rho, rho*u, rho*v, rho*E]
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :param IE: Internal edge array [nodeA, nodeB, cell left, cell right]
     :param BE: Boundary edge array [nodeA, nodeB, cell index, boundary flag]
     :param f: Number of edges to flag for refinement
     :param y: Ratio of specific heats - gamma
+    :returns: ele_to_flag_edges: [E.shape[0], 3] Numpy array that tells which edge is flagged for refinement on that cell
     """
     ele_to_flag_edges = np.zeros((E.shape[0], 3))
 
@@ -397,16 +403,16 @@ def find_flagged_edges(state, E, V, IE, BE, f, y):
 
 
 @njit(cache=True)
-def split_cell(state, E, V, E2e):
+def split_cells(state, E, V, E2e):
     """Splits the cells (E) using the E2e matrix which says which edge needs to be refined. Refinement is done according
     to the 1-2-3 flagging (1 flag -> 2 cells, 2 flag -> 3 cells, 3 flag -> 4 cells).
 
-    :param state: Nx4 state vector array
-    :param E: Element-2-Node matrix
-    :param V: Coordinates of nodes
-    :param IE: Internal edge array [nodeA, nodeB, cell left, cell right]
-    :param BE: Boundary edge array [nodeA, nodeB, cell index, boundary flag]
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :param E2e: Element-2-Edges for which edges need to be refined
+    :returns: new_state: The new state vector array interpolated onto the new mesh, new_E: The new Element-2-Node array,
+     V: The new array of node x-y positions
     """
     new_E = np.empty(shape=(0, 3), dtype=np.int32)
     new_state = np.empty(shape=(0, 4))
@@ -515,10 +521,11 @@ def split_boundaries(E, V, BE, E2e):
     """Splits the boundary edges (BE) using the E2e matrix which says which edge needs to be refined. It checks if a
     boundary edge needs to be refined by running it through E2e and if it does, it updates the boundary edge node pairs.
 
-    :param E: Element-2-Node matrix
-    :param V: Coordinates of nodes
-    :param BE: Boundary edge array [nodeA, nodeB, cell index, boundary flag]
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :param BE: [:, 4] Numpy array boundary Edge Matrix [nodeA, nodeB, cell, boundary flag]
     :param E2e: Element-2-Edges for which edges need to be refined
+    :returns: new_BE: [:, 3] Numpy array of nodes that make up the new split boundaries
     """
     new_BE = np.empty((0, 3), dtype=np.int32)
 
@@ -572,6 +579,7 @@ def write_new_mesh(E, V, new_BE, Bname, fname):
     :param new_BE: Nx3 matrix, [nodeA, nodeB, BC Flag]
     :param Bname: Boundary edge names
     :param fname: Filename to write the mesh to
+    :returns: Nothing. Writes the new mesh to fname.
     """
     # Write out the mesh to fname.gri and then parse it again using the given reading/hashing functionaility
     f = open(fname, 'w')
@@ -604,18 +612,19 @@ def write_new_mesh(E, V, new_BE, Bname, fname):
 def adapt_mesh(state, E, V, IE, BE, Bname, f, y, fname):
     """Adapts the mesh using the error between cell states which is described as jumps in Mach number.
 
-    :param state: State vector array
-    :param E: Element-2-Node matrix
-    :param V: Coordinates of nodes
+    :param state: [:, 4] Numpy array of state vectors, each row is 1 cell's state [rho, rho*u, rho*v, rho*E]
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :param IE: Internal edge array [nodeA, nodeB, cell left, cell right]
     :param BE: Boundary edge array [nodeA, nodeB, cell index, boundary flag]
     :param Bname: Boundary edge names
     :param f: Number of edges to flag for refinement
     :param y: Ratio of specific heats - gamma
     :param fname: Filename to write the mesh to
+    :returns: new_state: New state vector array interpolated onto the new mesh, mesh: Newly refined mesh
     """
     hashed_refinement_matrix = find_flagged_edges(state, E, V, IE, BE, f, y)
-    new_state, new_E, new_V = split_cell(state, E, V, hashed_refinement_matrix)
+    new_state, new_E, new_V = split_cells(state, E, V, hashed_refinement_matrix)
     new_boundaries = split_boundaries(E, new_V, BE, hashed_refinement_matrix)
     write_new_mesh(new_E, new_V, new_boundaries, Bname, fname)
     mesh = readgri.readgri(fname)

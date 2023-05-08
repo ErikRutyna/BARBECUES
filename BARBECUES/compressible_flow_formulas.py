@@ -3,7 +3,8 @@ import math
 import numpy as np
 
 
-
+# A collection of compressible flow formulas coded while taking Aerospace 520 @ University of Michigan that are used
+# once/twice in the code base.
 def f(beta, theta, M1, gamma):
     """theta-beta-Mach formula except the returned result is the LHS - RHS.
 
@@ -21,11 +22,10 @@ def f(beta, theta, M1, gamma):
     return fout
 
 
-def fp(beta, theta, M1, gamma):
+def fp(beta, M1, gamma):
     """Derivative of the LHS - RHS of the theta-beta-Mach formula.
 
     :param beta: turning angle in radians
-    :param theta: flow turn angle in radians
     :param M1: upstream of shock Mach number
     :param gamma: ratio of specific heats
     :return: fout = LHS - RHS of the derivative theta-beta-Mach formula
@@ -63,7 +63,7 @@ def solvebeta(theta, M1, gamma):
 
     # 100 iterations of Newton-Raphson for root finder to get the value of beta that best fits the t-b-M relationship
     for i in range(100):
-        beta = beta - f(beta, theta, M1, gamma) / fp(beta, theta, M1, gamma)
+        beta = beta - f(beta, theta, M1, gamma) / fp(beta, M1, gamma)
 
     return beta
 
@@ -321,7 +321,7 @@ def PMexpansion(theta, M1, T1, p1, gamma):
     T2 = T1_T2 ** -1 * T1
 
     # Pressure
-    P1_P2 = (T1_T2) ** (gamma / (gamma - 1))
+    P1_P2 = T1_T2 ** (gamma / (gamma - 1))
     p2 = P1_P2 ** -1 * p1
 
     result = {'M2': M2, 'T2': T2, 'p2': p2}

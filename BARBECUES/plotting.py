@@ -8,6 +8,7 @@ def plot_mesh(Mesh, fname):
 
     :param Mesh: Mesh dictionary
     :param fname: filename for what the figure is saved under
+    :returns: Nothing.
     """
     V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
     f = plt.figure(figsize=(12,12))
@@ -36,10 +37,13 @@ def plot_mach(Mesh, state, fname, config):
     """Contour/tricolor plot of the Mach number at each cell in the mesh.
 
     :param Mesh: Mesh dictionary
-    :param state: Nx4 state vectory array
+    :param state: [:, 4] Numpy array of state vectors, each row is 1 cell's state [rho, rho*u, rho*v, rho*E]
     :param fname: filename for what the figure is saved under
+    :param config: Simulation configuration containing information about the working fluid.
+    :returns: Nothing.
     """
-    V = Mesh['V']; E = Mesh['E']; BE = Mesh['BE']
+    V = Mesh['V']
+    E = Mesh['E']
     figure = plt.figure(figsize=(12, 12))
 
     # Calculate Mach numbers to plot
@@ -74,6 +78,8 @@ def plot_stagnation_pressure(mesh, state, fname, config):
     :param mesh: Mesh dictionary
     :param state: Nx4 state vectory array
     :param fname: filename for what the figure is saved under
+    :param config: Simulation configuration containing information about the working fluid.
+    :returns: Nothing.
     """
     V = mesh['V']; E = mesh['E']; BE = mesh['BE']
     figure = plt.figure(figsize=(12, 12))
@@ -109,9 +115,10 @@ def plot_stagnation_pressure(mesh, state, fname, config):
 def plot_mesh_flagged(mesh, flagged_cells, fname):
     """Plots the mesh and also highlights the cells flagged for refinement.
 
-    :param Mesh: Mesh dictionary
+    :param mesh: Mesh dictionary
     :param flagged_cells: Flagged cell indices
     :param fname: Filename for what the figure is saved under
+    :returns: Nothing.
     """
     V = mesh['V']; E = mesh['E']; BE = mesh['BE']
     f = plt.figure(figsize=(12,12))
@@ -136,6 +143,7 @@ def plot_grid(nodes, fname):
 
     :param nodes: [x, y] coordinate pairs of all node locations
     :param fname: Filename for what the figure is saved under
+    :returns: Nothing.
     """
     f = plt.figure(figsize=(12, 12))
     plt.scatter(x=nodes[:, 0], y=nodes[:, 1])
@@ -150,13 +158,17 @@ def plot_moc(E, V, BE, moc, fname):
     """Plots the characteristic lines as they reflect off of the walls in the domain when a MOC initialization is
     performed.
 
-    :param mesh: Mesh dictionary
-    :param moc: List of characteristic lines and their reflection points
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :param BE: [:, 4] Numpy array boundary Edge Matrix [nodeA, nodeB, cell, boundary flag]
+    :param moc: N-length list of characteristic lines and in each line is a [:, 2] Numpy array of points that draw the
+    line and its reflections across the object in the flow
     :param fname: Filename for what the figure is saved under
+    :returns: Nothing.
     """
     f = plt.figure(figsize=(12,12))
     # Plots all the triangles in the mesh in black
-    # plt.triplot(V[:,0], V[:,1], E, '-', color='black')
+    plt.triplot(V[:,0], V[:,1], E, '-', color='black')
     # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
         if BE[i, 3] == 0:
@@ -183,6 +195,7 @@ def plot_residuals(residuals):
     """Plots all the residuals for the simulation.
 
     :param residuals: Nx4 residual array
+    :returns: Nothing.
     """
     f = plt.figure(figsize=(12, 12))
 
@@ -203,7 +216,8 @@ def plot_residuals(residuals):
 def plot_performance(coefficients):
     """Plots the performance coefficients of the simulation as a function of iteration number.
 
-    :param coefficients: Nx4 array of coefficients [cd, cl, cmx, atpr]
+    :param coefficients: [:, 3] Numpy array of vehicle coefficients, [cd, cl, atpr]
+    :returns: Nothing.
     """
     f, axs = plt.subplots(2, 2, figsize=(12, 12))
 
@@ -225,10 +239,12 @@ def plot_config(mesh, state, residuals, coefficients, config, i):
     """Plotting driver that makes all the plots according to the data configuration config.
 
     :param mesh: Mesh dictionary {'E', 'V', 'IE', 'BE', 'Bname'}
-    :param state: Nx4 state vector array
-    :param residuals: Nx5 array of residuals [mass, x-momentum, y-momentum, energy, L1-Total]
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
+    :param residuals: [:, 5] Numpy array of residuals [mass, x-momentum, y-momentum, energy, L1-Total]
+    :param coefficients: [:, 3] Numpy array of vehicle coefficients, [cd, cl, atpr]
     :param config: All simulation configuration options influding fluid information and filename
     :param i: Adaptive cycle number, is 0 for no adaptations
+    :returns: Nothing.
     """
     if config['plot_mesh']: plot_mesh(mesh, config['filename'] + str(i) + '.png')
     if config['plot_mach']: plot_mach(mesh, state, config['filename'] + '_M_' + str(i) + '.png', config)

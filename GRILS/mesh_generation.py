@@ -5,7 +5,6 @@ import numpy as np
 import os
 
 
-# TODO: Make another MAIN.py that is for pyswarms in order to find the most optimal running conditions
 def main():
     """This main function can be used for mesh generation. Various examples have been provided inside the function and
     can be used as a reference when one might want to make their own mesh. The process follows a similar pattern for
@@ -93,21 +92,21 @@ def main():
     return
 
 
-def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh'):
+def write_mesh(bbox, V, T, interior=None, exitBC=None, fname='mesh'):
     """Writes the newly made mesh as a *.gri file in the ../Meshes/ directory if it exists and creates it if it doesn't
 
     :param bbox: [xmin, xmax, ymin, ymax] x-y coordinate pair array of edges that make up the bounding box of the domain
     :param V: [N, 2] x-y coordinate pair array of nodes
     :param T: [N, 3] Indices of V that make up the triangular elements
     :param interior: [N, 2] length list of x-y coordinate pairs of path that make up interior wall edges
-    :param exit: [N, 2] length list of x-y coordinate pairs of path that make up exit wall edges
+    :param exitBC: [N, 2] length list of x-y coordinate pairs of path that make up exit wall edges
     :param fname: Filename to save the mesh as
     """
     eps = 1e-12
 
     inflow = []
     outflow = []
-    exit = []
+    exitBC = []
     wall = []
 
     # Look for the mesh output directory, if it cannot find it, make it and move the working directory there
@@ -175,7 +174,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh'):
                 wall.append(edge3)
 
         # Check if the edge's midpoint is in the "exit" boundary condition for ATPR tracking
-        if exit is not None:
+        if exitBC is not None:
             # TODO: Setup (Even if basic) to account for zones that have ATPR (and remove it from outflow)
             pass
 
@@ -183,7 +182,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh'):
     num_bc = 2
     if len(wall) != 0:
         num_bc += 1
-    if len(exit) != 0:
+    if len(exitBC) != 0:
         num_bc += 1
 
     f.write('{0}\n'.format(num_bc))
@@ -217,7 +216,7 @@ def write_mesh(bbox, V, T, interior=None, exit=None, fname='mesh'):
     # Plot the actual mesh for visualization purposes
     fig = plt.figure(figsize=(12,12))
     # Plots all the triangles in the mesh in black
-    plt.triplot(V[:,0], V[:,1], T, '-', color='black')
+    plt.triplot(V[:,0], V[:,1], T, '-', color='black', linewidth=0.25)
     plt.axis('equal')
     plt.tick_params(axis='both', labelsize=12)
     fig.tight_layout()

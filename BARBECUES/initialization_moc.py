@@ -1,10 +1,10 @@
-import math
-import numpy as np
-import compressible_flow_formulas
 import cell_geometry_formulas as cgf
+import compressible_flow_formulas
 import initialization as intlzn
 from numba import njit
+import numpy as np
 import plotting
+import math
 
 
 def initialize_moc(E, V, BE, M, a, y):
@@ -12,11 +12,13 @@ def initialize_moc(E, V, BE, M, a, y):
     the solution using those oblique shocks. FLOW MUST GO FROM LEFT TO RIGHT as it uses the left running characteristic
     lines.
 
-    :param mesh: Read in *.gri file
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :param BE: [:, 4] Numpy array boundary Edge Matrix [nodeA, nodeB, cell, boundary flag]
     :param M: Freestream Mach number
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
-    :return:
+    :return: state: [:, 4] Numpy array of state vectors, each row is 1 cell's state [rho, rho*u, rho*v, rho*E]
     """
     # Generate the characteristic lines from the inflow locations
     moc_lines = moc_inflow(V, BE, M, a)
@@ -110,7 +112,7 @@ def moc_inflow(V, BE, M, a):
     :param BE: Nx4 array of boundary edge information, [node_A, node_B, cell_i, flag]
     :param M: Freestream Mach number
     :param a: Freestream angle of attack
-    :return:
+    :return: An initial list of characteristic lines that intersect the geometry and go from inflwo to outflow
     """
     # Mach angle
     mu = math.asin((1 / M))
@@ -158,7 +160,9 @@ def moc_reflect(V, BE, M, a, y, moc_lines):
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
     :param moc_lines: N length list of Mx2 arrays that make up the coordinate pairs of line segments for MOC lines
-    :return:
+    :returns: An updated list of characteristic lines that where each index of the list is an [:, 2] Numpy array of
+     points in the path the characteristic line takes as it moves from the inflow to outflow and reflects off
+     of the object in the flow
     """
     wall_BEs = []
     for be in BE:
@@ -228,7 +232,7 @@ def check_intersection2(q, qs, p, pr):
     :param qs: End point of L1
     :param p: Start point of L2
     :param pr: End point of L2
-    :return:
+    :returns: The point of intersection between the two line segments [x-intersection, y-intersection], or [None, None]
     """
     # "Parameterization" of the line segments
     s = qs - q
@@ -258,18 +262,16 @@ def check_intersection2(q, qs, p, pr):
     else:
         return np.array((None, None))
 
-
 @njit(cache=True)
 def check_intersection3(q, qs, p, pr, xlim, ylim):
     """Numerically finds the intersection between two line segments.
-
     :param q: Start point of L1
     :param qs: End point of L1
     :param p: Start point of L2
     :param pr: End point of L2
     :param xlim: Bounds of the domain in the x-dir [xmin, xmax]
     :param ylim: Bounds of the domain in the y-dir [ymin, ymax]
-    :return:
+    :returns: The point of intersection between the two line segments [x-intersection, y-intersection], or [-Inf, -Inf]
     """
 
     # Number of steps to march along the parametric vectors

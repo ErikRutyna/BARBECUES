@@ -7,9 +7,9 @@ import math
 def centroid(E, V):
     """Returns an array of centroids for all cells in the mesh.
 
-    :param E: Element-2-Node Matrix
-    :param V: Node coordinates
-    :return: centroids of all cells in mesh
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :returns: [:, 2] Numpy array of x-y coordinates of the centroids of all cells
     """
     centroids = np.zeros((E.shape[0], 2))
 
@@ -28,8 +28,7 @@ def edge_properties_calculator(node_a, node_b):
 
     :param node_a: X-Y Coordinates of node A
     :param node_b: X-Y Coordinates of node B
-    :return length: Length of the edge from A->B
-    :return norm: Normal vector out of the edge in CCW fashion: [nx, ny]
+    :returns: length: Length of the edge from A->B, norm: Normal vector out of the edge in CCW fashion: [nx, ny]
     """
 
     length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
@@ -42,9 +41,9 @@ def edge_properties_calculator(node_a, node_b):
 def area_calculator(E, V):
     """Calculates the area of the two triangular cells for the given indices.
 
-    :param E: Element-2-Node Matrix
-    :param V: Node coordinates
-    :return area: Area of the cells
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :returns: Area - [:, 1] Numpy array of area of the cells
     """
     area = np.zeros(E.shape[0])
     for i in range(E.shape[0]):

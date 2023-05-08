@@ -66,11 +66,13 @@ you need a minimum of one of the following ASCs:
 There are 3 unique initialization methods for initializing the state variables in 
 the cells of the domain.
 
-| Initialization Method | Effect                                                                                                                                                                                                                                                                  |
-|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| freestream            | All cells have freestream initial condition.                                                                                                                                                                                                                            |
-| sdf                   | The Mach number is scaled via the minimum signed distance value to all internal walls and then that Mach number is used to compute the freestream state.                                                                                                                |
-| moc                   | Propagates characteristic lines from the inflow and reflects <br/> them off of the inviscid walls. Uses aforementioned reflections in order to create zones for oblique shock trains which can scale Mach number down according to the location within the shock train. |
+| Init Method | Effect                                                                                                                                                                                                                                                                  |
+|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| freestream  | All cells have freestream initial condition.                                                                                                                                                                                                                            |
+| weak        | The freestream Mach number is halved and then the freestream <br/> initial condition is applied.                                                                                                                                                                        |
+| linear      | Uses a linear scaling function to scale the freestream Mach <br/> number based on each cell's centroid coordinate location.                                                                                                                                             |
+| exp         | Uses an exponential scaling function to scale the freestream <br/> Mach number based on each cell's centroid coordinate location.                                                                                                                                       |
+| moc         | Propagates characteristic lines from the inflow and reflects <br/> them off of the inviscid walls. Uses aforementioned reflections in order to create zones for oblique shock trains which can scale Mach number down according to the location within the shock train. |
 
 
 # Changelog

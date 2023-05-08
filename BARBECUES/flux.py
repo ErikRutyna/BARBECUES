@@ -11,7 +11,6 @@ def F_euler_2d(u, p):
     the state vector.
 
     :param u: State vector
-    :param y: Ratio of specific heats - gamma
     :param p: Local state's pressure
     :return: The flux vector for the 2D compressible Euler equations, each column is a direction
     """
@@ -49,8 +48,7 @@ def roe_euler_2d(u_l, u_r, n, y):
     :param u_r: State vector in the right cell [rho, rho*u, rho*v, rho*E]
     :param n: Unit normal pointing from left cell to right cell
     :param y: Ratio of specific heats - gamma
-    :return: flux: Flux of state vector from left to right cell
-    :return: s: Maximum propagation speed of the state variables
+    :return: flux: Flux of state vector from left to right cell, s: Maximum propagation speed of the state variables
     """
     # Local state pressures
     p_l = helper.calculate_static_pressure_single(u_l, y)
@@ -124,15 +122,15 @@ def compute_residuals_roe(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y):
 
     :param IE: Internal edges [nodeA, nodeB, left cell, right cell]
     :param BE: Boundary edges [nodeA, nodeB, cell, boundary edge flag]
-    :param state: Nx4 array of state values
-    :param be_l: Boundary edge lengths
-    :param be_n: Boundary edge normal vectors
-    :param ie_l: Internal edge lengths
-    :param ie_n: Internal edge normal vectors
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
+    :param be_l: [:, 1] Boundary edge lengths
+    :param be_n: [:, 2] Boundary edge normal vectors
+    :param ie_l: [:, 1] Internal edge lengths
+    :param ie_n: [:, 2] Internal edge normal vectors
     :param M: Freestream Mach number
     :param a: Freestream AoA
     :param y: Ratio of specific heats - gamma
-    :return:
+    :returns: residuals: Flow field residuals at each cell, sum_sl: Propagation speeds at each cell
     """
     residuals = np.zeros((state.shape[0], 4), dtype=np.float64)  # Residuals from fluxes
     sum_sl = np.transpose(np.zeros((state.shape[0]), dtype=np.float64))
@@ -193,27 +191,26 @@ def hlle_euler_2d(u_l, u_r, n, y):
 
     :param u_l: State vector in the left cell [rho, rho*u, rho*v, rho*E]
     :param u_r: State vector in the right cell [rho, rho*u, rho*v, rho*E]
-    :param n: Unit normal pointing from left cell to right cell
-    :param fluid: Fluid information for ratio of specific heats
-    :return: flux: Flux of state vector from left to right cell
-    :return: s: Maximum propagation speed of the state variables
+    :param n: Unit normal vector pointing from left cell to right cell
+    :param y: Ratio of specific heats of the working fluid
+    :return: flux: Flux of state vector from left to right cell, s: Maximum propagation speed of the state variables
     """
     p_l = helper.calculate_static_pressure_single(u_l, y)
     F_left = F_euler_2d(u_l, p_l)
     F_left = F_left[:, 0] * n[0] + F_left[:, 1] * n[1]
 
     p_r = helper.calculate_static_pressure_single(u_r, y)
-    F_right= F_euler_2d(u_r, p_r)
-    F_right= F_right[:, 0] * n[0] + F_right[:, 1] * n[1]
+    F_right = F_euler_2d(u_r, p_r)
+    F_right = F_right[:, 0] * n[0] + F_right[:, 1] * n[1]
 
     vel_l = np.array((u_l[1] / u_l[0], u_l[2] / u_l[0]))
     vel_r = np.array((u_r[1] / u_r[0], u_r[2] / u_r[0]))
 
-    q_l = np.linalg.norm(vel_l)
-    q_r = np.linalg.norm(vel_r)
+    q_l = math.sqrt(vel_l[0]**2 + vel_l[1]**2)
+    q_r = math.sqrt(vel_r[0]**2 + vel_r[1]**2)
 
-    h_left = (u_l[3] + helper.calculate_static_pressure_single(u_l, y)) / u_l[0]
-    h_right= (u_r[3] + helper.calculate_static_pressure_single(u_r, y)) / u_r[0]
+    h_left = (u_l[3] + p_l) / u_l[0]
+    h_right= (u_r[3] + p_r) / u_r[0]
 
     c_l = math.sqrt((y - 1) * (h_left - q_l ** 2 / 2))
     c_r = math.sqrt((y - 1) * (h_right - q_r ** 2 / 2))
@@ -244,15 +241,15 @@ def compute_residuals_hlle(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y):
 
     :param IE: Internal edges [nodeA, nodeB, left cell, right cell]
     :param BE: Boundary edges [nodeA, nodeB, cell, boundary edge flag]
-    :param state: Nx4 array of state values
-    :param be_l: Boundary edge lengths
-    :param be_n: Boundary edge normal vectors
-    :param ie_l: Internal edge lengths
-    :param ie_n: Internal edge normal vectors
+    :param state: [:, 4] Numpy array of state vectors, [rho, rho*u, rho*v, rho*E]
+    :param be_l: [:, 1] Boundary edge lengths
+    :param be_n: [:, 2] Boundary edge normal vectors
+    :param ie_l: [:, 1] Internal edge lengths
+    :param ie_n: [:, 2] Internal edge normal vectors
     :param M: Freestream Mach number
     :param a: Freestream AoA
     :param y: Ratio of specific heats - gamma
-    :return:
+    :returns: residuals: Flow field residuals at each cell, sum_sl: Propagation speeds at each cell
     """
     residuals = np.zeros((state.shape[0], 4), dtype=np.float64)  # Residuals from fluxes
     sum_sl = np.transpose(np.zeros((state.shape[0]), dtype=np.float64))

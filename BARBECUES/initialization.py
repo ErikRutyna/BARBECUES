@@ -26,6 +26,8 @@ def initialize_boundary(N, M, a, y):
     return initial_condition
 
 
+# TODO: Port SDF code for wall segments, implement init-wall-SDF function
+
 @njit(cache=True)
 def initialize_boundary_weak(N, M, a, y):
     """Initializes the solution by setting everything based on the freestream
@@ -104,10 +106,6 @@ def initialize_boundary_dist_exp(E, V, M, a, y):
     :return: initial_condition: np.array of the position-scaled freestream initial condition of the mesh
     """
     initial_condition = np.zeros((E.shape[0], 4))
-    x_min = (V[:, 0]).min()
-    x_max = (V[:, 0]).max()
-    y_min = (V[:, 1]).min()
-    y_max = (V[:, 1]).max()
 
     centroids = cfg.centroid(E, V)
 

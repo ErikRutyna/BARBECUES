@@ -5,15 +5,15 @@ import math
 import flux
 
 
-
-# This version of edgehash was written by Erik Rutyna
 def edgehash2(E, B):
-# Identifies interior and boundary edges given element-to-node paring
-# Originally written by Krzysztof Fidkowski, modified/re-written by Erik Rutyna
-    # BE's are unique in that any set of two nodes corresponds to exactly ONE edge, boundary, and cell
-    # IE's are unique in that any set of two nodes corresponds to exactly one edge and one pair of adjacent cells
-# IE contains (n1, n2, elem1, elem2) for each interior edge
-# BE contains (n1, n2, elem, bgroup) for each boundary edge
+    """Another version of the edge hashing function originally written by Krzysztof J. Fidkowski @ University of
+    Michigan. This one was written by myself, Erik Rutyna, as a way to understand his version.
+
+    :param E: [:, 3] numpy array that is the Element-2-Node matrix
+    :param B: [:, 2] numpy array that consists of all the boundary edges
+    :returns: IE: [:, 4] numpy array of internal edges [nodeA, nodeB, cell i, cell j],
+    BE: [:, 4] numpy array of boundary edges [nodeA, nodeB, cell i, boundary edge flag]
+    """
     Ne = E.shape[0]; Nn = np.amax(E)+1
     IE = np.empty((1, 4), dtype=int)
     BE = np.empty((1, 4), dtype=int)

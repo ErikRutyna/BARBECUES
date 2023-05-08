@@ -1,7 +1,7 @@
 {    
     "simulation": [
        {
-        "mesh_path": "../Meshes/mesh0.gri",
+        "mesh_path": "../Meshes/cow.gri",
         "restart_files": false,
 
           "adaptive_cycles": 2,
@@ -32,7 +32,7 @@
 
     "data_processing": [
         {
-            "filename": "diamond_airfoil",
+            "filename": "cow3",
             "plot_mesh": true,
             "plot_mach": true,
             "plot_stag_press": true,

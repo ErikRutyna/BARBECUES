@@ -13,6 +13,7 @@ def postprocess(mesh, state, coefficients, residuals, config, i, t):
     :param config: Simulation json in dictionary format
     :param i: Identifier for plotting
     :param t: Simulation runtime
+    :retruns: Nothing - saves files to the ../Output/ directory.
     """
     # Reference length calc
     ref_length = abs((mesh['V'][mesh['BE'][np.where(np.array(mesh['Bname']) == 'Wall')[0][0] == mesh['BE'][:, 3]][:, 0:2]][:, 0]).max() - \

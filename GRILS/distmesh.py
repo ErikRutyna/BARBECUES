@@ -8,7 +8,7 @@ import copy
 import os
 
 
-def distmesh2d(sdf, h, bound_box, fixed_points, k=9.61377755e-02, Fscale=1.58554652, maxIterations=105):
+def distmesh2d(sdf, h, bound_box, fixed_points, k=0.095, Fscale=1.588, maxIterations=100):
     """Runs a modified version of the DistMesh level-set meshing algorithm. This version of DistMesh has been optimized
     with PySwarms in an effort to minimize the number of iterations to produce a high quality mesh for any given 2D
     geometry.

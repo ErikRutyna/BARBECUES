@@ -1,10 +1,10 @@
 {    
     "simulation": [
        {
-        "mesh_path": "../Meshes/demo_plate.gri",
+        "mesh_path": "../Meshes/demoDiamond.gri",
         "restart_files": false,
 
-          "adaptive_cycles": 0,
+          "adaptive_cycles": 2,
           "adaptation_percentage": 0.075,
 
           "flux_method": 0
@@ -32,7 +32,7 @@
 
     "data_processing": [
         {
-            "filename": "flat_plate",
+            "filename": "demoDiamond",
             "plot_mesh": true,
             "plot_mach": true,
             "plot_stag_press": true,

@@ -8,9 +8,7 @@ def preprocess():
     """Sets up the simulation pre-processing by reading the given json file and dumping its contents into the static
     Numba dictionary.
 
-    :param fname: The json filename/filename path.
-    :return *_con: configuration for that section of the program, i.e. simulation controls simulation parameters (i.e.
-    flux method), or fluid_con controls information about the working fluid (i.e. CPG air has gamma = 1.4)
+    :returns: Merged - a merged dictionary of various configurations setup in the config.json file.
     """
     # Read in the configuration file
     f = open('config.json')

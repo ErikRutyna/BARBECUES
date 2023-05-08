@@ -8,6 +8,8 @@ GRILS/report.log
 GRILS/optimize_distmesh.py
 
 BARBECUES/__pycache__
+BARBECUES/config.json
+
 .idea/*
 git_commands.txt
 solver.prof

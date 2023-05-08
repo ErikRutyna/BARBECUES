@@ -1,8 +1,8 @@
-import flux
-import numpy as np
-import helper
 import cell_geometry_formulas as cgf
 from numba import njit
+import numpy as np
+import helper
+import flux
 
 
 @njit(cache=True)
@@ -10,21 +10,22 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.
 
-    :param E: Element-2-Node array
-    :param V: Node Coordinate array
-    :param BE: Boundary Edge Matrix [nodeA, nodeB, cell, boundary flag]
-    :param IE: Internal Edge Matrix [nodeA, nodeB, cell left, cell right]
-    :param state: State vector array
+    :param E: [:, 3] Numpy array of the Element-2-Node hashing
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
+    :param BE: [:, 4] Numpy array boundary Edge Matrix [nodeA, nodeB, cell, boundary flag]
+    :param IE: [:, 4] Numpy array internal Edge Matrix [nodeA, nodeB, cell left, cell right]
+    :param state: [:, 4] Numpy array of state vectors, each row is 1 cell's state [rho, rho*u, rho*v, rho*E]
     :param M: Freestream Mach number
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
     :param f_method: Flux method identifier
     :param c_method: Convergence method identifier
     :param c_tol: Standard/backup convergence method tolerance
-    :param s_tol: Smart convergence minimum tolerence
+    :param s_tol: Smart convergence minimum tolerance
     :param s_len: Smart convergence ASC array length
     :param s_e_tol: Smart convergence running average tolerance
     :param asc_check: Smart convergence asymptotic convergence criteria
+    :returns: Nothing, modifies the state vector array in place.
     """
     # Convergence and iteration information
     converged = False
