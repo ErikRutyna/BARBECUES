@@ -174,7 +174,7 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
             u = U[be[2]][1] / U[be[2]][0]
             v = U[be[2]][2] / U[be[2]][0]
             q = np.dot(be_n, np.array([u, v]))
-            flux_c = flux.F_euler_2d(U[be[2]], config)
+            flux_c = flux.stateFluxEuler2D(U[be[2]], config)
             h_l = (flux_c[3, 0] + flux_c[3, 1]) / ( flux_c[0, 0] + flux_c[0, 1])
             c = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
 
@@ -193,7 +193,7 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
         u_l_u = u_l[1] / u_l[0]
         u_l_v = u_l[2] / u_l[0]
         q_l = np.linalg.norm([u_l_u, u_l_v])
-        flux_l = flux.F_euler_2d(u_l, config)
+        flux_l = flux.stateFluxEuler2D(u_l, config)
         h_l = (flux_l[3, 0] + flux_l[3, 1]) / ( flux_l[0, 0] + flux_l[0, 1])
         c_l = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
         m_l = q_l / c_l
@@ -203,7 +203,7 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
         u_r_u = u_r[1] / u_r[0]
         u_r_v = u_r[2] / u_r[0]
         q_r = np.linalg.norm([u_r_u, u_r_v])
-        flux_r = flux.F_euler_2d(u_r, config)
+        flux_r = flux.stateFluxEuler2D(u_r, config)
         h_r = (flux_r[3, 0] + flux_r[3, 1]) / ( flux_r[0, 0] + flux_r[0, 1])
         c_r = math.sqrt((config.y - 1) * (h_r - q ** 2 / 2))
 
