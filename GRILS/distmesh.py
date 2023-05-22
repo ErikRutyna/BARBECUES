@@ -1,7 +1,8 @@
-import geometry_generation as geomGen
+import geometryGeneration as geomGen
 import matplotlib.pyplot as plt
 from scipy import spatial as sp
 from scipy import sparse as spa
+plt.switch_backend('agg')
 from numba import njit
 import numpy as np
 import copy
@@ -126,12 +127,14 @@ def distmesh2d(sdf, h, bound_box, fixed_points, k=0.095, Fscale=1.588, maxIterat
         energyResidual = (0.5 * k * (updatedEdgeLengths - edgeLengthsWanted) ** 2).sum()
         energyResiduals.append(energyResidual)
 
-        # Track the average cell quality across the mesh
-        averageCellQuality.append(geomGen.cellQualityCalculator(T, V))
+        # Track the average cell for cells close to boundaries to ensure that cells that have strong geometry
+        # interaction are of high quality
+        Tmidpoints = V[T].sum(1) / 3
+        averageCellQuality.append(geomGen.cellQualityCalculator(T[np.abs(sdf(Tmidpoints)) < 0.1], V))
 
         # Printout for observation
         if i % 10 == 0:
-            print('Mesh Iteration #: {0} \t Meshing Energy Residual: {1} \t Average Cell Quality: {2}'
+            print('Mesh Iteration #: {0} \t Meshing Energy Residual: {1} \t Near Boundary Average Cell Quality: {2}'
                   .format(i, energyResiduals[-1], averageCellQuality[-1]))
 
         # Part 7. - Termination condition: All nodes that had to be moved didn't move that much
@@ -393,8 +396,8 @@ def sdf_segment(a, b, p):
     for i in range(p.shape[0]):
         sdf = np.zeros(a.shape[0])
         for j in range(a.shape[0]):
-            h = min(1, max(0, np.dot(p[i] - a[j], b[j] - p[i]) / np.linalg.norm(b[j] - a[j])))
-            sdf[j] = np.linalg.norm(p[i] - a[j] - h * (b[j] - a[j]))
+            h = min(1, max(0, np.dot(p[i] - a[j], b[j] - p[i]) / np.sqrt(np.power(b[j] - a[j], 2).sum())))
+            sdf[j] = np.sqrt(np.power(p[i] - a[j] - h * (b[j] - a[j]), 2).sum())
         sdf_min[i] = np.min(sdf)
     return sdf_min
 

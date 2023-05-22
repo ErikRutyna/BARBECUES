@@ -1,4 +1,4 @@
-import geometry_generation as geomGen
+import geometryGeneration as geomGen
 import matplotlib.pyplot as plt
 import distmesh as dm
 import numpy as np
@@ -49,7 +49,7 @@ def main():
     V, T = dm.distmesh2d(demoCircleSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoCircle)),
                          0.15, 1.1, 100)
     # Step 6. Writing the mesh
-    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoCircle, True), None, 'demoCircle')
+    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoCircle, True), None, 'demoCircle')
 
 
     # Flat Plate
@@ -62,12 +62,12 @@ def main():
     V, T = dm.distmesh2d(demoPlateSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoPlate)),
                          0.15, 1.1, 100)
     # Step 6. Writing the mesh
-    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoPlate, True), None, 'demoPlate')
+    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoPlate, True), None, 'demoPlate')
 
 
     # Triangle
     # Step 3. Generating a triangle with the 3 given points and a distance step size of 0.1 units
-    demoTri= geomGen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
+    demoTri = geomGen.triangle_bbox_wall_gen(np.array((-2., 1.)), np.array((1., 0.75)), np.array((1., 0.6)), 0.1)
     # Step 4. Anonymous signed distance function for a boolean intersection of the bounding box square and the circle
     demoTriSDF = lambda p: dm.ddiff(dm.dpoly(compDomainBoundingBoxEdges, p),
                              dm.dpoly(demoTri, p))
@@ -75,7 +75,7 @@ def main():
     V, T = dm.distmesh2d(demoTriSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoTri)),
                          0.15, 1.1, 100)
     # Step 6. Writing the mesh
-    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoTri, True), None, 'demoTriangle')
+    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoTri, True), None, 'demoTriangle')
 
 
     # Diamond
@@ -87,19 +87,19 @@ def main():
     # Step 5. Calling distmesh
     V, T = dm.distmesh2d(demoDiamondSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoDiamond)),
                          0.15, 1.1, 100)
-    # Step 6. Writing the mesh
-    write_mesh(compDomainBoundingBox, V, T, geomGen.internal_walls(demoDiamond, True), None, 'demoDiamond')
+    # Step 6. Writing the mesh - this one has a line segment on the entire RHS wall as an "Exit" condition
+    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoDiamond, True), [np.array((4, 4, 4, -4))], 'demoDiamond')
     return
 
 
-def write_mesh(bbox, V, T, interior=None, exitBC=None, fname='mesh'):
+def writeMesh(bbox, V, T, interior=None, exitBCList=None, fname='mesh'):
     """Writes the newly made mesh as a *.gri file in the ../Meshes/ directory if it exists and creates it if it doesn't
 
     :param bbox: [xmin, xmax, ymin, ymax] x-y coordinate pair array of edges that make up the bounding box of the domain
     :param V: [N, 2] x-y coordinate pair array of nodes
     :param T: [N, 3] Indices of V that make up the triangular elements
-    :param interior: [N, 2] length list of x-y coordinate pairs of path that make up interior wall edges
-    :param exitBC: [N, 2] length list of x-y coordinate pairs of path that make up exit wall edges
+    :param interior: [N, 2] Numpy array of x-y coordinate pairs of path that make up interior wall edges
+    :param exitBC: N-length list of 4-element Numpy arrays of x-y coordinates that make up the line segments that define the exit condition [x1 y1 x2 y2]
     :param fname: Filename to save the mesh as
     """
     eps = 1e-12
@@ -144,39 +144,53 @@ def write_mesh(bbox, V, T, interior=None, exitBC=None, fname='mesh'):
         Me2 = Ve2.sum(0) / 2
         Me3 = Ve3.sum(0) / 2
 
-        # Check if midpoint x-coordinate is on LHS/RHS - LHS -> Inflow, RHS -> Outflow
-        if abs(Me1[0] - bbox[0]) < eps: inflow.append([edge1])
-        if abs(Me1[0] - bbox[1]) < eps: outflow.append([edge1])
+        # Tracker to make sure edges are accounted for, this gets updated when they've been assigned to a BC flag array
+        edgeFlagTracker = np.array((False, False, False))
 
-        if abs(Me2[0] - bbox[0]) < eps: inflow.append([edge2])
-        if abs(Me2[0] - bbox[1]) < eps: outflow.append([edge2])
-
-        if abs(Me3[0] - bbox[0]) < eps: inflow.append([edge3])
-        if abs(Me3[0] - bbox[1]) < eps: outflow.append([edge3])
-
-        # Check if midpoint y-coordinate is on bottom/top - Bottom -> Inflow, Top -> Outflow
-        if abs(Me1[1] - bbox[2]) < eps: inflow.append([edge1])
-        if abs(Me1[1] - bbox[3]) < eps: outflow.append([edge1])
-
-        if abs(Me2[1] - bbox[2]) < eps: inflow.append([edge2])
-        if abs(Me2[1] - bbox[3]) < eps: outflow.append([edge2])
-
-        if abs(Me3[1] - bbox[2]) < eps: inflow.append([edge3])
-        if abs(Me3[1] - bbox[3]) < eps: outflow.append([edge3])
-
-        # Now check if the edge midpoint lines up with a midpoint of an interior "wall" edge
+        # Check if the edge is an interior wall edge
         if interior is not None:
             if np.abs(edge1 - interior_V).sum(1).min() < eps or np.abs(np.flip(edge1) - interior_V).sum(1).min() < eps:
                 wall.append(edge1)
+                edgeFlagTracker[0] = True
             if np.abs(edge2 - interior_V).sum(1).min() < eps or np.abs(np.flip(edge2) - interior_V).sum(1).min() < eps:
                 wall.append(edge2)
+                edgeFlagTracker[1] = True
             if np.abs(edge3 - interior_V).sum(1).min() < eps or np.abs(np.flip(edge3) - interior_V).sum(1).min() < eps:
                 wall.append(edge3)
+                edgeFlagTracker[2] = True
 
-        # Check if the edge's midpoint is in the "exit" boundary condition for ATPR tracking
-        if exitBC is not None:
-            # TODO: Setup (Even if basic) to account for zones that have ATPR (and remove it from outflow)
-            pass
+        # Check if the edge is a supersonic exit edge
+        if exitBCList is not None:
+            for i in range(len(exitBCList)):
+                startExitBC = np.array((exitBCList[i][0], exitBCList[i][2]))
+                endExitBC = np.array((exitBCList[i][1], exitBCList[i][3]))
+                if geomGen.onLineSegment(startExitBC, endExitBC, Me1) and not edgeFlagTracker[0]:
+                        exitBC.append(edge1)
+                        edgeFlagTracker[0] = True
+                if geomGen.onLineSegment(startExitBC, endExitBC, Me2) and not edgeFlagTracker[1]:
+                        exitBC.append(edge2)
+                        edgeFlagTracker[1] = True
+                if geomGen.onLineSegment(startExitBC, endExitBC, Me3) and not edgeFlagTracker[2]:
+                    exitBC.append(edge3)
+                    edgeFlagTracker[2] = True
+
+        # Check if the edge is an outflow edge, RIGHT/TOP edges of bounding box
+        if abs(Me1[0] - bbox[1]) < eps and not edgeFlagTracker[0]: outflow.append([edge1]); edgeFlagTracker[0] = True
+        if abs(Me2[0] - bbox[1]) < eps and not edgeFlagTracker[1]: outflow.append([edge2]); edgeFlagTracker[1] = True
+        if abs(Me3[0] - bbox[1]) < eps and not edgeFlagTracker[2]: outflow.append([edge3]); edgeFlagTracker[2] = True
+
+        if abs(Me1[1] - bbox[3]) < eps and not edgeFlagTracker[0]: outflow.append([edge1]); edgeFlagTracker[0] = True
+        if abs(Me2[1] - bbox[3]) < eps and not edgeFlagTracker[1]: outflow.append([edge2]); edgeFlagTracker[1] = True
+        if abs(Me3[1] - bbox[3]) < eps and not edgeFlagTracker[2]: outflow.append([edge3]); edgeFlagTracker[2] = True
+
+        # Check if the edge is an inflow edge, LEFT/BOT edges of bounding box
+        if abs(Me1[0] - bbox[0]) < eps and not edgeFlagTracker[0]: inflow.append([edge1]); edgeFlagTracker[0] = True
+        if abs(Me2[0] - bbox[0]) < eps and not edgeFlagTracker[1]: inflow.append([edge2]); edgeFlagTracker[1] = True
+        if abs(Me3[0] - bbox[0]) < eps and not edgeFlagTracker[2]: inflow.append([edge3]); edgeFlagTracker[2] = True
+
+        if abs(Me1[1] - bbox[2]) < eps and not edgeFlagTracker[0]: inflow.append([edge1]); edgeFlagTracker[0] = True
+        if abs(Me2[1] - bbox[2]) < eps and not edgeFlagTracker[1]: inflow.append([edge2]); edgeFlagTracker[1] = True
+        if abs(Me3[1] - bbox[2]) < eps and not edgeFlagTracker[2]: inflow.append([edge3]); edgeFlagTracker[2] = True
 
     # Number of exit BC's depending on what the inputs exist
     num_bc = 2
@@ -194,7 +208,11 @@ def write_mesh(bbox, V, T, interior=None, exitBC=None, fname='mesh'):
         f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
 
     # Write out the external boundary edges
-    # f.write('0 2 Exit\n')
+    if len(exitBC) != 0:
+        exitBC = np.squeeze(np.array(exitBC))
+        f.write('{0} 2 Exit\n'.format(exitBC.shape[0]))
+        for pair in exitBC:
+            f.write('%i %i\n' % (pair[0] + 1, pair[1] + 1))
 
     outflow = np.squeeze(np.array(outflow))
     f.write('{0} 2 Outflow\n'.format(outflow.shape[0]))

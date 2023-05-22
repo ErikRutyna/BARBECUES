@@ -1,4 +1,4 @@
-# B.A.R.B.E.C.U.E.S. & GRILS V1.4.0
+# B.A.R.B.E.C.U.E.S. & GRILS V1.5.0
 B.A.R.B.E.C.U.E.S. (Basically Another Really Badly Enhanced Compressible 
 Unstructured Euler Solver) is a 2D CFD code developed in Python that solves the
 compressible Euler equations. The code is meant to be a testing ground for 
@@ -17,9 +17,7 @@ the "mesh_generation.py" script.
 
 NOTE: There appear to be some issues regarding freestream conditions with 
 different initialization methods and getting the flowfield to converge. It is
-recommended to use either "freestream" or "exp" based initialization methods. 
-Eventually all methods for initialization will be replaced with either a level 
-set method or strict freestream method.
+recommended to use either "freestream" or "exp" based initialization methods.
 
 ## Boundary Conditions
 BCs must follow this convention in order for the NUMBA JIT to properly 
@@ -76,6 +74,8 @@ the cells of the domain.
 
 
 # Changelog
+V1.5.0 In-code documentation updated, doc-strings fixed, etc. Additionally, GRILS has had compatability added to add the "Exit" outflow boundary condition and has had some other small tweaks to increase information during runtime.
+
 V1.4.0 GRILS Mesher has had its documentation updated and and default values optimized using particle swarm 
 optimization. All the things I wished to accomplish with GRILS have been done and it will be moving into a finished 
 state. V1.5.0 will contain a manual with in-depth information regarding the program, configurations, examples, and 

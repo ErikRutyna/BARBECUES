@@ -43,8 +43,9 @@ def calculate_atpr(V, BE, stag_pressure):
 def calculate_stagnation_pressure(state, mach, y):
     """Calculates the stagnation pressure for each state vector
 
-    :param state: Nx4 array of state variables - one per cell [rho, rho*u, rho*v, rho*E]
-    :param mach: Nx1 array of the local Mach number in each cell
+    :param state: [:, 4] Numpy array of state variables, [rho, rho*u, rho*v, rho*E]
+    :param mach: [:, 1] Numpy array of the local Mach number in each cell
+    :param y: Ratio of specific heats of the working fluid, gamma
     :return: Nx1 array of stagnation pressures - one per cell
     """
     # Constants to be used in the stagnation pressure formula
@@ -64,6 +65,7 @@ def calculate_mach(state, y):
     """Calculates the Mach number for each unique state vector.
 
     :param state: Local state vector in a given cell
+    :param y: Ratio of specific heats of the working fluid, gamma
     :return: Returns mach number
     """
     # Velocity magnitude
@@ -84,6 +86,7 @@ def calculate_mach_single(state, y):
     mach_calc function to account for single slices and whole mesh arrays.
 
     :param state: Local state vector in a given cell
+    :param y: Ratio of specific heats of the working fluid, gamma
     :return: Returns mach number
     """
     # Velocity
@@ -107,6 +110,7 @@ def calculate_static_pressure(state, y):
     """Calculates local static pressure from the given state.
 
     :param state: Nx4 array of Euler state variables
+    :param y: Ratio of specific heats of the working fluid, gamma
     :return: pressure: local static pressure for each state vector
     """
     # Leading constant term
@@ -166,7 +170,9 @@ def calculate_forces(V, BE, state, M, a, y):
     :param V: Node coodinates
     :param BE: Boundary Edge information [nodeA, nodeB, state i, edge identifier]
     :param state: Nx4 state vector set
+    :param M: [:] Numpy array of cell Mach numbers
     :param a: Angle of Attack
+    :param y: Ratio of specific heats of the working fluid, gamma
     :return: cd, cl, cmx (force and moment coefficients)
     """
     cx = 0
@@ -199,6 +205,13 @@ def calculate_plate_friction(V, BE, state, mu_inf, Rex_inf, cv, tinf, mu_ref, t_
     :param V: Node coodinates
     :param BE: Boundary Edge information [nodeA, nodeB, state i, edge identifier]
     :param state: Nx4 state vector set
+    :param mu_inf: Freestream viscosity in SI units
+    :param Rex_inf: Reynolds number per unit length in SI units
+    :param cv: Specific volume heating coefficient in SI units
+    :param tinf: Freestream temperature
+    :param mu_ref: Sutherland's reference viscosity in SI units
+    :param t_ref: Sutherland's reference temperature in Kelvin
+    :param S: Sutherland's constant in Kelvin
     :return: cf_approx
     """
     cf_approx = 0

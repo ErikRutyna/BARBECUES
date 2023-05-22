@@ -14,7 +14,7 @@ def initialize_boundary(N, M, a, y):
     :param M: Cell's local Mach number
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
-    :return: initial_condition: np.array of the freestream initial condition of the mesh
+    :return: initial_condition: Numpy array of the freestream initial condition of the mesh
     """
     initial_condition = np.zeros((N, 4))
 
@@ -25,8 +25,6 @@ def initialize_boundary(N, M, a, y):
 
     return initial_condition
 
-
-# TODO: Port SDF code for wall segments, implement init-wall-SDF function
 
 @njit(cache=True)
 def initialize_boundary_weak(N, M, a, y):

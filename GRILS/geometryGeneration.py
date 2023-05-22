@@ -60,6 +60,30 @@ def cellQualityCalculator(E, V):
     return np.mean(quality)
 
 
+@njit(cache=True)
+def onLineSegment(a, b, p):
+    """Checks if point p is on the line segment defined by a -> b.
+
+    :param a: [x, y] Numpy array for start of line segment
+    :param b: [x, y] Numpy array for end of line segment
+    :param p: [x, y] Numpy array for point to check if on the line segment
+
+    :returns: onExitSegment: Boolean, True if p exists on the line segment a-b, false otherwise
+    """
+
+    # collinearCheck = (b.x - a.x) * (c.y - a.y) == (c.x - a.x) * (b.y - a.y)
+    collinearCheck = abs((b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1])) < 1e-8
+
+    # betweenCheck = p <= q <= r or r <= q <= p, but with distances instead
+    betweenCheck = abs(np.sqrt(np.power(a - b, 2).sum()) - \
+                       ((np.sqrt(np.power(a - p, 2).sum())) + (np.sqrt(np.power(p - b, 2).sum())))) < 1e-8
+
+    if collinearCheck and betweenCheck:
+        return True
+    else:
+        return False
+
+
 def sqr_bbox_wall_gen(L, W, ds):
     """Generates a [:, 2] numpy array whose values are points along the edge of an "L x W" rectangle.
 
@@ -193,7 +217,7 @@ def csv_bbox_Wall_gen(fname):
     return V
 
 
-def internal_walls(wall_points, looped):
+def internalWalls(wall_points, looped):
     """Returns an array of [:, 4] x-y coordinates that make up each edge for a given path of edges. Each row of the
     array consists of [x1, y1, x2, y2] for where [x1, y1] refer to the first point in a line segment of the edge for the
     given path of edges, and [x2, y2] consist of the second point in the line segment of the edge for the given path

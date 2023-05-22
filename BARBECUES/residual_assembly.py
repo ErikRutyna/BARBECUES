@@ -35,7 +35,8 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     coefficients = np.zeros((0, 3))
     # Asymptotic Convergence Criteria for Smart Convergence
     ascs = np.empty((0, 3))
-    # TODO: Investigate dynamic CFL numbers, HoM (gradient-based), and HoI schemes (RK2, RK4)
+    # TODO: Investigate dynamic CFL numbers, HoM (gradient-based), and HoI schemes (RK2, RK4, RK45)
+    # This will likely involve two convergence possibilities, # of iterations or until fully/smart converged
     cfl = 1
 
     be_l, be_n = np.zeros((BE.shape[0])), np.zeros((BE.shape[0], 2))
@@ -51,7 +52,7 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     sum_sl = np.transpose(np.zeros((E.shape[0])))  # s*l vector for computing time steps
 
     while not converged:
-        if iteration_number % 10 == 0:
+        if iteration_number % 25 == 0:
             # Print out a small tracking statement every 10 iterations to watch the program
             print_resi = float(residual_norms[-1, 4])
             print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
