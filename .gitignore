@@ -1,4 +1,6 @@
 Meshes/mesh0.gri
+Meshes/*.gri
+Meshes/*.png
 
 Output/*
 PDFs/*

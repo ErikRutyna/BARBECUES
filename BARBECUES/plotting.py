@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import numpy as np
 import helper
 from matplotlib import ticker

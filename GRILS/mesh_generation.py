@@ -1,5 +1,6 @@
 import geometryGeneration as geomGen
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import distmesh as dm
 import numpy as np
 import os
@@ -88,7 +89,7 @@ def main():
     V, T = dm.distmesh2d(demoDiamondSDF, 0.2, compDomainBoundingBox, np.vstack((compDomainBoundingBoxEdges, demoDiamond)),
                          0.15, 1.1, 100)
     # Step 6. Writing the mesh - this one has a line segment on the entire RHS wall as an "Exit" condition
-    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoDiamond, True), [np.array((4, 4, 4, -4))], 'demoDiamond')
+    writeMesh(compDomainBoundingBox, V, T, geomGen.internalWalls(demoDiamond, True), None, 'demoDiamond')
     return
 
 

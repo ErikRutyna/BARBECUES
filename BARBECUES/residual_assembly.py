@@ -30,11 +30,14 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     # Convergence and iteration information
     converged = False
     iteration_number = 1
+
     # All residual coefficient tracking for standard convergence/plotting purposes
     residual_norms = np.zeros((0, 5))
     coefficients = np.zeros((0, 3))
+
     # Asymptotic Convergence Criteria for Smart Convergence
     ascs = np.empty((0, 3))
+
     # TODO: Investigate dynamic CFL numbers, HoM (gradient-based), and HoI schemes (RK2, RK4, RK45)
     # This will likely involve two convergence possibilities, # of iterations or until fully/smart converged
     cfl = 1

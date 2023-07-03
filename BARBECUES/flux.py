@@ -22,12 +22,12 @@ def stateFluxEuler2D(u, p):
 
     off_momentum = u[1] * u[2] / u[0]
     # x-momentum
-    F[1, 0] = u[1] ** 2 / u[0] + p
+    F[1, 0] = (u[1]*u[1]) / u[0] + p
     F[1, 1] = off_momentum
 
     # y-momentum
     F[2, 0] = off_momentum
-    F[2, 1] = u[2] ** 2 / u[0] + p
+    F[2, 1] = (u[2]*u[2]) / u[0] + p
 
     # Enthalpy
     H = (u[3] + p) / u[0]
@@ -67,7 +67,7 @@ def roeEuler2D(stateLeft, stateRight, pressureLeft, pressureRight, n, y):
                 / (sqrtRhoLeft + sqrtRhoRight)
     roeAvgV = (sqrtRhoLeft * stateLeft[2] / stateLeft[0] + sqrtRhoRight * stateRight[2] / stateRight[0]) \
                 / (sqrtRhoLeft + sqrtRhoRight)
-    q = math.sqrt(roeAvgU ** 2 + roeAvgV ** 2)
+    qRoeSquared = roeAvgU*roeAvgU + roeAvgV*roeAvgV
 
     enthalpyLeft = (stateLeft[3] + pressureLeft) / stateLeft[0]
 
@@ -76,7 +76,7 @@ def roeEuler2D(stateLeft, stateRight, pressureLeft, pressureRight, n, y):
     roeAvgEnthalpy = (sqrtRhoLeft * enthalpyLeft + sqrtRhoRight * enthalpyRight) / (sqrtRhoLeft + sqrtRhoRight)
 
     # Speed of sound
-    c = math.sqrt((y - 1) * (roeAvgEnthalpy - (q ** 2) / 2))
+    c = math.sqrt((y - 1) * (roeAvgEnthalpy - qRoeSquared / 2))
 
     # Speed
     u = roeAvgU * n[0] + roeAvgV * n[1]
@@ -87,7 +87,7 @@ def roeEuler2D(stateLeft, stateRight, pressureLeft, pressureRight, n, y):
     # Entropy fix
     for i in range(len(eigens)):
         if eigens[i] < (0.05 * c):
-            eigens[i] = ((0.05 * c) ** 2 + eigens[i] ** 2) / (2 * (0.05 * c))
+            eigens[i] = ((0.0025 * c * c) + (eigens[i] * eigens[i])) / (0.1 * c)
 
     # Maximum propagation speed
     s_max = c + abs(u)
@@ -96,10 +96,10 @@ def roeEuler2D(stateLeft, stateRight, pressureLeft, pressureRight, n, y):
     s = np.array([0.5 * (eigens[0] + eigens[1]),
                   0.5 * (eigens[0] - eigens[1])])
 
-    g1 = (y - 1) * (q ** 2 / 2 * deltaState[0] - (roeAvgU * deltaState[1] + roeAvgV * deltaState[2]) + deltaState[3])
+    g1 = (y - 1) * (qRoeSquared / 2 * deltaState[0] - (roeAvgU * deltaState[1] + roeAvgV * deltaState[2]) + deltaState[3])
     g2 = -u * deltaState[0] + (deltaState[1] * n[0] + deltaState[2] * n[1])
 
-    c1 = g1 / c ** 2 * (s[0] - eigens[2]) + g2 / c * s[1]
+    c1 = g1 / (c*c) * (s[0] - eigens[2]) + g2 / c * s[1]
     c2 = g1 / c * s[1] + (s[0] - eigens[2]) * g2
 
     # Flux vectorization & normals
@@ -164,16 +164,17 @@ def compute_residuals_roe(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y):
             be_vel = V_plus - np.multiply(np.dot(V_plus, be_n[i]), be_n[i])
 
             # Boundary pressure
-            be_pressure = (y - 1) * (state[BE[i, 2], 3] - 0.5 * state[BE[i, 2], 0] * (be_vel[0] ** 2 + be_vel[1] ** 2))
+            be_pressure = (y - 1) * (state[BE[i, 2], 3] -
+                                     0.5 * state[BE[i, 2], 0] * ((be_vel[0]*be_vel[0]) + (be_vel[1]*be_vel[1])))
 
             # Enforcing no flow through with pressure condition
             be_flux = np.array((0, be_pressure * be_n[i, 0], be_pressure * be_n[i, 1], 0))
 
             # Calculate propagation speed
-            local_p = helper.calculate_static_pressure_single(state[BE[i, 2]], y)
+            local_p = pressures[BE[i, 2]]
             h = (state[BE[i, 2], 3] + local_p) / state[BE[i, 2], 0]
             be_smax = abs(u_plus * be_n[i, 0] + v_plus * be_n[i, 1]) \
-                      + math.sqrt((y - 1) * (h - (u_plus**2 + v_plus**2) / 2))
+                      + math.sqrt((y - 1) * (h - ((u_plus*u_plus) + (v_plus*v_plus)) / 2))
 
 
         elif BE[i, 3] == 1 or BE[i, 3] == 2:
