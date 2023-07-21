@@ -2,11 +2,13 @@ import cell_geometry_formulas as cgf
 from numba import njit
 import numpy as np
 import helper
-import flux
+import flux_roe
+import flux_hlle
 
 
-@njit(cache=True)
-def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, s_len, s_e_tol, asc_check):
+# @njit(cache=True)
+def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, convergenceTolerance, smartMinConvTol,
+                smartConvAscLen, smartConvASCAvgTol, smartASCsToCheck):
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.
 
@@ -18,21 +20,21 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     :param M: Freestream Mach number
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
-    :param f_method: Flux method identifier
-    :param c_method: Convergence method identifier
-    :param c_tol: Standard/backup convergence method tolerance
-    :param s_tol: Smart convergence minimum tolerance
-    :param s_len: Smart convergence ASC array length
-    :param s_e_tol: Smart convergence running average tolerance
-    :param asc_check: Smart convergence asymptotic convergence criteria
+    :param fluxMethod: Flux method identifier
+    :param convergenceMethod: Convergence method identifier
+    :param convergenceTolerance: Standard/backup convergence method tolerance
+    :param smartMinConvTol: Smart convergence minimum tolerance
+    :param smartConvAscLen: Smart convergence ASC array length
+    :param smartConvASCAvgTol: Smart convergence running average tolerance
+    :param smartASCsToCheck: Smart convergence asymptotic convergence criteria
     :returns: Nothing, modifies the state vector array in place.
     """
     # Convergence and iteration information
     converged = False
-    iteration_number = 1
+    iterationNumber = 0
 
     # All residual coefficient tracking for standard convergence/plotting purposes
-    residual_norms = np.zeros((0, 5))
+    residualNorms = np.zeros((0, 5))
     coefficients = np.zeros((0, 3))
 
     # Asymptotic Convergence Criteria for Smart Convergence
@@ -42,42 +44,42 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
     # This will likely involve two convergence possibilities, # of iterations or until fully/smart converged
     cfl = 1
 
-    be_l, be_n = np.zeros((BE.shape[0])), np.zeros((BE.shape[0], 2))
-    ie_l, ie_n = np.zeros((IE.shape[0])), np.zeros((IE.shape[0], 2))
-
-    for i in range(BE.shape[0]):
-        be_l[i], be_n[i] = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
-    for i in range(IE.shape[0]):
-        ie_l[i], ie_n[i] = cgf.edge_properties_calculator(V[IE[i, 0]], V[IE[i, 1]])
+    # TODO: Apply vectorized form in locations where un-vectorized form exists
+    beLength, beNorm = cgf.edgePropertiesCalculator(BE[:, 0:2], V)
+    ieLength, ieNorm = cgf.edgePropertiesCalculator(IE[:, 0:2], V)
 
     # Reset the residual and timestep arrays
     residuals = np.zeros((E.shape[0], 4))  # Residuals from fluxes
-    sum_sl = np.transpose(np.zeros((E.shape[0])))  # s*l vector for computing time steps
+    sumSL = np.transpose(np.zeros((E.shape[0])))  # s*l vector for computing time steps
 
     while not converged:
-        if iteration_number % 25 == 0:
-            # Print out a small tracking statement every 10 iterations to watch the program
-            print_resi = float(residual_norms[-1, 4])
-            print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
+
+        # Iteration and residual norm information print-outs
+        iterationNumber += 1
+
+        if iterationNumber % 25 == 0:
+            # Print out a small tracking statement every so many iterations to watch the program in command line
+            printResidual = float(residualNorms[-1, 4])
+            print("Iteration: ", iterationNumber, "\t L1 Residual Norm:", printResidual)
 
         # If-elif-else tree for flux method selection
-        if f_method == 1:
-            residuals, sum_sl = flux.compute_residuals_roe(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y)
-        elif f_method == 2:
-            residuals, sum_sl = flux.compute_residuals_hlle(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y)
+        if fluxMethod == 1:
+            residuals, sumSL = flux_roe.compResidualsRoe(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
+        elif fluxMethod == 2:
+            residuals, sumSL = flux_hlle.compute_residuals_hlle(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
         # If it cannot find the right flux method, it will default to the Roe Flux
         else:
-            residuals, sum_sl = flux.compute_residuals_roe(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y)
+            residuals, sumSL = flux_roe.compResidualsRoe(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
 
-        cont_norm = np.abs(residuals[:, 0]).sum()
-        xmom_norm = np.abs(residuals[:, 1]).sum()
-        ymom_norm = np.abs(residuals[:, 2]).sum()
-        ener_norm = np.abs(residuals[:, 3]).sum()
-        glob_norm = np.abs(residuals).sum()
+        cont_norm = (np.abs(residuals[:, 0])).sum()
+        xmom_norm = (np.abs(residuals[:, 1])).sum()
+        ymom_norm = (np.abs(residuals[:, 2])).sum()
+        ener_norm = (np.abs(residuals[:, 3])).sum()
+        glob_norm = (np.abs(residuals)).sum()
         new_norms = np.array((cont_norm, xmom_norm, ymom_norm, ener_norm, glob_norm))
 
         # Residual tracking - L1 norms of [continuity, x-moment, y-momentum, energy, all]
-        residual_norms = np.vstack((residual_norms, np.reshape(new_norms, (1, 5))))
+        residualNorms = np.vstack((residualNorms, np.reshape(new_norms, (1, 5))))
 
         # Coefficient tracking - exported for plotting purposes
         local_Mach = helper.calculate_mach(state, y)
@@ -87,45 +89,85 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, f_method, c_method, c_tol, s_tol, 
         coefficients = np.vstack((coefficients, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
 
         # Calculate delta_t and timestep forward the local states
-        deltat_deltaa = np.divide(2 * cfl, sum_sl)
+        deltat_deltaa = np.divide(2 * cfl, sumSL)
         state -= np.transpose(np.multiply(deltat_deltaa, np.transpose(residuals)))
 
-        # Apply the right convergence method depending on the configuration
-        if c_method == 1:
-            # Require some minimum degree of convergence to ensure proper physics
-            if residual_norms[-1, 4] < s_tol:
-                # Check the ASC quantities and add to back of array that tracks them
-                converge_check = []
+        # Check for convergence, if not converged update the ASCs and iterate
+        converged, ascs = checkConvergence(convergenceMethod, residualNorms, cl, cd, atpr, ascs, smartASCsToCheck,
+                                           smartConvAscLen, smartConvASCAvgTol, smartMinConvTol, convergenceTolerance)
 
-                # If the array is already at counter length - pop off the first value as we don't want it in the counter
-                if ascs.shape[0] >= s_len:
-                    # If we've hit length, check to see if the last value is close to the average for the desired ASCs
-                    for asc in asc_check:
-                        if asc == 0:
-                            if abs(ascs[-1, 0] - np.mean(ascs[-s_len+1::, 0])) / np.mean(ascs[-s_len+1::, 0]) < s_e_tol:
-                                converge_check.append(True)
-                        if asc == 1:
-                            if abs(ascs[-1, 1] - np.mean(ascs[-s_len+1::, 1])) / np.mean(ascs[-s_len+1::, 1]) < s_e_tol:
-                                converge_check.append(True)
-                        if asc == 2:
-                            if abs(ascs[-1, 2] - np.mean(ascs[-s_len+1::, 2])) / np.mean(ascs[-s_len+1::, 2]) < s_e_tol:
-                                converge_check.append(True)
-                    # If all checks pass, then its converged
-                    if np.all(np.array(converge_check)):
-                        print_resi = float(residual_norms[-1, 4])
-                        print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
-                        return residual_norms, coefficients
-                # Append the newly calculated values for the ASCs
-                ascs = np.vstack((ascs, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
-            # If Smart convergence somehow fails, employ standard convergence as a backup method
-            elif residual_norms[-1, 4] < c_tol:
-                print_resi = float(residual_norms[-1, 4])
-                print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
-                return residual_norms, coefficients
+    printResidual = float(residualNorms[-1, 4])
+    print("Iteration: ", iterationNumber, "\t L1 Residual Norm:", printResidual)
+    return residualNorms, coefficients
+
+
+@njit(cache=True)
+def checkConvergence(convergenceMethod, residualNorms, cl, cd, atpr, ascs, ascsToCheck, lengthSmartConvAvg,
+                     smartConvAvgTol, smartConvTol, residualTol):
+    """
+    Checks if the simulation is converged based on the specified convergence method and parameters set by the method.
+
+    Parameters
+    ----------
+    :param convergenceMethod: Value to determine convergence method, 1 implies smart convergence,
+                              anything else implies standard convergence
+    :param residualNorms: [:, 5] Numpy array of residual norms [continuity, x-momentum, y-momentum, energy, total]
+    :param cl: Lift coefficient from the most recent iteration
+    :param cd: Drag coefficient from the most recent iteration
+    :param atpr: Average total stagnation pressure recovered at "Exit" boundary condition from the most recent iteration
+    :param ascs: [:, 3] Array of asymptotic convergence criteria (cd, cl, atpr)
+    :param ascsToCheck: 1-D Numpy array of the ascs to check
+    :param lengthSmartConvAvg: Number of values to use in the smart convergence running average
+    :param smartConvAvgTol: Tolerance use in the smart convergence method running average
+    :param smartConvTol: Minimum convergence of the residuals before smart convergence activates
+    :param residualTol: Minimum convergence for the default convergence method, as well as a fallback value for smart
+                        convergence
+
+    Returns
+    -------
+    :returns: True or false depending on if the simulation is converged as well as the asymptotic convergence criteria
+    array with the set of parameters appended to the end if the convergence method returns false
+    """
+
+    # Apply the right convergence method depending on the configuration
+    if convergenceMethod == 1:
+        # Require some minimum degree of convergence to ensure proper physics
+        if residualNorms[-1, 4] < smartConvTol:
+            # Check the ASC quantities and add to back of array that tracks them
+            converge_check = []
+
+            # If the array is already at counter length - pop off the first value as we don't want it in the counter
+            if ascs.shape[0] >= lengthSmartConvAvg:
+                # If we've hit length, check to see if the last value is close to the average for the desired ASCs
+                for asc in ascsToCheck:
+                    if asc == 0:
+                        if abs(ascs[-1, 0] - np.mean(ascs[-lengthSmartConvAvg + 1::, 0])) / \
+                                np.mean(ascs[-lengthSmartConvAvg + 1::, 0]) < smartConvAvgTol:
+                            converge_check.append(True)
+                    if asc == 1:
+                        if abs(ascs[-1, 1] - np.mean(ascs[-lengthSmartConvAvg + 1::, 1])) / \
+                                np.mean(ascs[-lengthSmartConvAvg + 1::, 1]) < smartConvAvgTol:
+                            converge_check.append(True)
+                    if asc == 2:
+                        if abs(ascs[-1, 2] - np.mean(ascs[-lengthSmartConvAvg + 1::, 2])) / \
+                                np.mean(ascs[-lengthSmartConvAvg + 1::, 2]) < smartConvAvgTol:
+                            converge_check.append(True)
+                # If all checks pass, then the simulation has converged
+                if np.all(np.array(converge_check)) or residualNorms[-1, 4] < residualTol:
+                    return True, ascs
+
+            # Append the newly calculated values for the ASCs and exit out without being converged
+            ascs = np.vstack((ascs, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
+            return False, ascs
+
+        # If Smart convergence is unable to use ASCs, then use standard convergence as a backup method
         else:
-            if residual_norms[-1, 4] < c_tol:
-                print_resi = float(residual_norms[-1, 4])
-                print("Iteration: ", iteration_number, "\t L1 Residual Norm:", print_resi)
-                return residual_norms, coefficients
-        iteration_number += 1
-    return residual_norms, coefficients
+            # Append the newly calculated values for the ASCs and exit out without being converged
+            ascs = np.vstack((ascs, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
+            return False, ascs
+    else:
+        # Standard convergence - if residuals are below some global minimum then the simulation is physically converged
+        if residualNorms[-1, 4] < residualTol:
+            return True, ascs
+        else:
+            return False, ascs

@@ -11,8 +11,6 @@ import postprocess as pop
 import shutil
 
 
-# TODO: Comb over the entire code and look for optimizations
-# TODO: Comb over the code and apply Python linting style where appropriate
 def main():
     """This main function executes the BARBEQUES Euler Solver. General process
     follows this pattern:
