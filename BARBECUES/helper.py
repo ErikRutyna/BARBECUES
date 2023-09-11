@@ -34,21 +34,6 @@ def calculate_atpr(V, BE, stag_pressure):
     # Formula for ATPR = deltaL * P0 / sum(deltaL) / P0inf
     atpr = 1 / totalLength / freestream_stagnation * \
            np.sum(np.multiply(boundary_stagnation, exitEdgeLengths))
-    #
-    #
-    #
-    #
-    #
-    # d = 0
-    # delta_y = np.zeros(len(exit_edges))
-    # for i in range(len(delta_y)):
-    #     # delta_y = y_nodeB - y_nodeA
-    #     delta_y[i], _ = cgf.edge_properties_calculator(V[exit_edges[i, 1]], V[exit_edges[i, 0]])
-    #     # Total length of the exit plane
-    #     d += delta_y[i]
-    #
-    # # Numerical integration via summation over exit plane edges
-    # atpr = 1 / d / freestream_stagnation * np.sum(np.multiply(boundary_stagnation, delta_y))
 
     return atpr
 

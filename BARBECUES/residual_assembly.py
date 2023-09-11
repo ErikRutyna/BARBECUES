@@ -6,7 +6,7 @@ import flux_roe
 import flux_hlle
 
 
-# @njit(cache=True)
+@njit(cache=True)
 def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, convergenceTolerance, smartMinConvTol,
                 smartConvAscLen, smartConvASCAvgTol, smartASCsToCheck):
     """Runs steady state Euler equation solver in 2D based on the given
@@ -64,12 +64,12 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, con
 
         # If-elif-else tree for flux method selection
         if fluxMethod == 1:
-            residuals, sumSL = flux_roe.compResidualsRoe(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
+            residuals, sumSL = flux_roe.compResidualsRoeVectorized(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
         elif fluxMethod == 2:
             residuals, sumSL = flux_hlle.compute_residuals_hlle(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
         # If it cannot find the right flux method, it will default to the Roe Flux
         else:
-            residuals, sumSL = flux_roe.compResidualsRoe(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
+            residuals, sumSL = flux_roe.compResidualsRoeVectorized(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
 
         cont_norm = (np.abs(residuals[:, 0])).sum()
         xmom_norm = (np.abs(residuals[:, 1])).sum()
