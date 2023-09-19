@@ -74,6 +74,8 @@ the cells of the domain.
 
 
 # Changelog
+V1.5.0.1 Minor optimizations to Roe Flux algorithm, also fixed issue with MATPLOTLIB figures popping up.
+
 V1.5.0 In-code documentation updated, doc-strings fixed, etc. Additionally, GRILS has had compatability added to add the "Exit" outflow boundary condition and has had some other small tweaks to increase information during runtime.
 
 V1.4.0 GRILS Mesher has had its documentation updated and and default values optimized using particle swarm 

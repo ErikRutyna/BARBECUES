@@ -19,22 +19,21 @@ def calculate_atpr(V, BE, stag_pressure):
     if exit_edges.shape[0] == 0:
         return 0
 
-    # Boundary edge stagnation pressures
-    boundary_stagnation = stag_pressure[exit_edges[:, 2]]
-
     # Freestream stagnation pressure - maximum of all values should always be freestream
     freestream_stagnation = max(stag_pressure)
 
-    d = 0
-    delta_y = np.zeros(len(exit_edges))
-    for i in range(len(delta_y)):
-        # delta_y = y_nodeB - y_nodeA
-        delta_y[i], _ = cgf.edge_properties_calculator(V[exit_edges[i, 1]], V[exit_edges[i, 0]])
-        # Total length of the exit plane
-        d += delta_y[i]
+    # Boundary edge stagnation pressures
+    boundary_stagnation = stag_pressure[exit_edges[:, 2]]
 
-    # Numerical integration via summation over exit plane edges
-    atpr = 1 / d / freestream_stagnation * np.sum(np.multiply(boundary_stagnation, delta_y))
+    # Length of the exit edges where stagnation pressure is measured
+    exitEdgeIndices = exit_edges[:, 0:2]
+    exitEdgeLengths, _ = cgf.edgePropertiesCalculator(exitEdgeIndices, exitEdgeIndices)
+
+    totalLength = exitEdgeLengths.sum()
+
+    # Formula for ATPR = deltaL * P0 / sum(deltaL) / P0inf
+    atpr = 1 / totalLength / freestream_stagnation * \
+           np.sum(np.multiply(boundary_stagnation, exitEdgeLengths))
 
     return atpr
 
@@ -175,22 +174,19 @@ def calculate_forces(V, BE, state, M, a, y):
     :param y: Ratio of specific heats of the working fluid, gamma
     :return: cd, cl, cmx (force and moment coefficients)
     """
-    cx = 0
-    cy = 0
-
     freestream_state = initzn.init_state_mach(M, a, y)
     Pinf = calculate_static_pressure_single(freestream_state, y)
     qinf = y / 2 * Pinf * M**2
 
+    wallEdges = BE[BE[:, 3] == 0, :]
+    wallEdgeIndices = wallEdges[:, 0:2]
 
-    for i in range(BE.shape[0]):
-        if BE[i, 3] == 0:
-            l, n = cgf.edge_properties_calculator(V[BE[i, 0]], V[BE[i, 1]])
-            pressure = calculate_static_pressure_single(state[BE[i, 2]], y)
+    wallEdgeLengths, wallEdgeNorms = cgf.edgePropertiesCalculator(wallEdgeIndices, V)
 
-            # Pressure integrals for lift and drag
-            cx += pressure * n[0] * l
-            cy += pressure * n[1] * l
+    wallPressues = calculate_static_pressure(state[wallEdges[:, 2]], y)
+
+    cx = (np.multiply(np.multiply(wallPressues, wallEdgeNorms[:, 0]), wallEdgeLengths)).sum()
+    cy = (np.multiply(np.multiply(wallPressues, wallEdgeNorms[:, 1]), wallEdgeLengths)).sum()
 
     cd = (cy * np.sin(a * np.pi / 180) + cx * np.cos(a * np.pi / 180)) / qinf
     cl = (cy * np.cos(a * np.pi / 180) - cx * np.sin(a * np.pi / 180)) / qinf
@@ -214,18 +210,17 @@ def calculate_plate_friction(V, BE, state, mu_inf, Rex_inf, cv, tinf, mu_ref, t_
     :param S: Sutherland's constant in Kelvin
     :return: cf_approx
     """
-    cf_approx = 0
+    wallEdges = BE[BE[:, 3] == 1, :]
+    wallEdgeIndices = wallEdges[:, 0:2]
 
-    for be in BE:
-        if be[3] == 0:
-            l, _ = cgf.edge_properties_calculator(V[be[0]], V[be[1]])
-            # T = E / Cv
-            t_local = state[be[2], 3] / state[be[2], 0] / cv
-            mu_local = cff.sutherland_viscosity(t_local, mu_ref, t_ref, S)
-            cw = mu_local * tinf / (mu_inf * t_local)
+    wallEdgeLengths, _ = cgf.edgePropertiesCalculator(wallEdgeIndices, V)
 
-            # From the NASA paper in the citations
-            cf_local = 0.664 / (math.sqrt(Rex_inf * l / cw))
-            cf_approx += cf_local
+    wallEdgeTemps = np.divide(state[wallEdges[:, 2], 3], state[wallEdges[:, 2], 0]) / cv
+
+    wallEdgeMu = cff.sutherland_viscosity(wallEdgeTemps, mu_ref, t_ref, S)
+
+    wallCoeff = np.divide(wallEdgeMu * tinf, mu_inf * wallEdgeLengths)
+
+    cf_approx = (0.664 / np.sqrt(np.divide(np.multiply(Rex_inf, wallEdgeLengths), wallCoeff))).sum()
 
     return cf_approx
