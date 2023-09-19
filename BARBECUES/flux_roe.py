@@ -207,12 +207,14 @@ def compResidualsRoeVectorized(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y):
     :param y: Ratio of specific heats - gamma
     :returns: residuals: Flow field residuals at each cell, sum_sl: Propagation speeds at each cell
     """
-    residuals = np.zeros((state.shape[0], 4), dtype=np.float64)  # Residuals from fluxes
+    residuals = np.zeros((state.shape[0], 4), dtype=np.float64)
     sum_sl = np.transpose(np.zeros((state.shape[0]), dtype=np.float64))
 
     freestreamState = intlzn.init_state_mach(M, a, y)
 
     pressureFreestream = helper.calculate_static_pressure_single(freestreamState, y)
+
+    fluxFreestream = stateFluxEuler2D(freestreamState, pressureFreestream)
 
     sqrtRho, u, v, pressures, H, fluxEuler, mach = computeStateVals(state, y)
 
@@ -222,57 +224,19 @@ def compResidualsRoeVectorized(IE, BE, state, be_l, be_n, ie_l, ie_n, M, a, y):
     sum_sl += sumSLWallBE
 
     # Exit boundary edge flux computations
-    residualsExitBEs, sumSLExitBE = supersonicExitBEFlux(BE,u, v, mach, be_n, be_l, fluxEuler)
-    residuals += residualsExitBEs
+    residualsOutflowBEs, sumSLExitBE = outflowBEFluxFast(BE, u, v, mach, fluxEuler, be_n, be_l)
+    residuals += residualsOutflowBEs
     sum_sl += sumSLExitBE
 
-    # fluxCheck = np.zeros((residuals.shape[0], 4))
+    # Inflow boundary edge flux computations
+    residualsInflowBEs, sumSLInflowBE = inflowBEFlux(BE, state, u, v, sqrtRho, H, fluxEuler, be_n, be_l, freestreamState, pressureFreestream, fluxFreestream, y)
+    residuals += residualsInflowBEs
+    sum_sl += sumSLInflowBE
 
-    # Internal edges
-    for i in range(IE.shape[0]):
-        ie_flux, ie_smax = roeEuler2D(state[IE[i, 2]], state[IE[i, 3]],
-                                      pressures[IE[i, 2]], pressures[IE[i, 3]], ie_n[i], y)
-
-        residuals[IE[i, 2]] += ie_flux * ie_l[i]  # Summing residuals to be taken out of cell i
-        residuals[IE[i, 3]] -= ie_flux * ie_l[i]  # Summing residuals to negative taken out of cell N (added to cell N)
-
-        sum_sl[IE[i, 2]] += ie_smax * ie_l[i]
-        sum_sl[IE[i, 3]] += ie_smax * ie_l[i]
-
-    # Boundary edges with their respective conditions
-    if np.unique(BE[:, 3]).shape[0] == 3:
-        for i in range(BE.shape[0]):
-            if BE[i, 3] == 0:
-                continue
-
-            elif BE[i, 3] == 1:
-                # be_flux, be_smax = roeEuler2D(state[BE[i, 2]], state[BE[i, 2]],
-                #                               pressures[BE[i, 2]], pressureFreestream, be_n[i], y)
-                # fluxCheck[BE[i, 2]] += be_flux * be_l[i]
-                continue
-
-            elif BE[i, 3] == 2:
-                # Apply freestream inflow boundary conditions
-                be_flux, be_smax = roeEuler2D(state[BE[i, 2]], freestreamState,
-                                              pressures[BE[i, 2]], pressureFreestream, be_n[i], y)
-
-                residuals[BE[i, 2]] += be_flux * be_l[i]
-                sum_sl[BE[i, 2]] += be_smax * be_l[i]
-    else:
-        for i in range(BE.shape[0]):
-            if BE[i, 3] == 0:
-                continue
-
-            elif BE[i, 3] == 1 or BE[i, 3] == 2:
-                # Apply supersonic outflow boundary conditions
-                continue
-            elif BE[i, 3] == 3:
-                # Apply freestream inflow boundary conditions
-                be_flux, be_smax = roeEuler2D(state[BE[i, 2]], freestreamState,
-                                              pressures[BE[i, 2]], pressureFreestream, be_n[i], y)
-
-                residuals[BE[i, 2]] += be_flux * be_l[i]
-                sum_sl[BE[i, 2]] += be_smax * be_l[i]
+    # Internal boundary edge flux computations
+    residualIEs, sumSLIEs = roeEuler2DInternalEdges(IE, state, sqrtRho, u, v, H, fluxEuler, ie_n, ie_l, y, pressures)
+    residuals += residualIEs
+    sum_sl += sumSLIEs
 
     return residuals, sum_sl
 
@@ -337,9 +301,8 @@ def computeStateVals(state, y):
     return sqrtRho, u, v, P, H, fluxEuler, a
 
 
-# TODO: Write this function with the goal being to vectorize it as much as possible, ideally the whole thing can be vectorized such that no loops are needed
-# @njit(cache=True)
-def roeEuler2DInternalEdges(state, sqrtRho, u, v, p, fluxEuler, indexLeft, indexRight, norms, lengths, y):
+@njit(cache=True)
+def roeEuler2DInternalEdges(IE, state, sqrtRho, u, v, H, fluxEuler, norms, lengths, y, p):
     """
 
     Parameters
@@ -360,14 +323,125 @@ def roeEuler2DInternalEdges(state, sqrtRho, u, v, p, fluxEuler, indexLeft, index
     -------
 
     """
+    internalResiduals = np.zeros((u.shape[0], 4), dtype=np.float64)
+    sumSL = np.zeros((u.shape[0]), dtype=np.float64)
 
-    flux = 0
-    sMax = 0
-    return flux, sMax
+    # Filter out indices for left and right states
+    leftFilter = IE[:, 2]
+    rightFilter = IE[:, 3]
+
+    deltaState = state[rightFilter] - state[leftFilter]
+
+    # "Left" is the interior state, while "right" is the freestream state
+    sqrtRhoLeft = sqrtRho[leftFilter]
+    sqrtRhoRight = sqrtRho[rightFilter]
+
+    uLeft = u[leftFilter]
+    uRight = u[rightFilter]
+
+    vLeft = v[leftFilter]
+    vRight = v[rightFilter]
+
+    enthalpyLeft = H[leftFilter]
+    enthalpyRight = H[rightFilter]
+
+    # Roe-Average Quantities
+    roeAvgU = np.divide(np.multiply(sqrtRhoLeft, uLeft) + np.multiply(sqrtRhoRight, uRight),
+                        (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgV = np.divide(np.multiply(sqrtRhoLeft, vLeft) + np.multiply(sqrtRhoRight, vRight),
+                        (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgEnthalpy = np.divide(np.multiply(sqrtRhoLeft, enthalpyLeft) + np.multiply(sqrtRhoRight, enthalpyRight),
+                               (sqrtRhoLeft + sqrtRhoRight))
+    qRoeSquared = np.multiply(roeAvgU, roeAvgU) + np.multiply(roeAvgV, roeAvgV)
+
+    # Speed of Sound
+    c = np.sqrt((y - 1) * (roeAvgEnthalpy - qRoeSquared / 2))
+
+    # Local Speeds
+    u = np.multiply(roeAvgU, norms[:, 0]) + np.multiply(roeAvgV, norms[:, 1])
+
+    # System's eigenvalues
+    eigenvalues = np.transpose(np.abs(np.vstack((u + c, u - c, u))))
+
+    # Entropy fix
+    for i in range(eigenvalues.shape[0]):
+        for j in range(3):
+            if eigenvalues[i, j] < (0.05 * c[i]):
+                eigenvalues[i, j] = ((0.0025 * c[i] * c[i]) + (eigenvalues[i, j] * eigenvalues[i, j])) / (0.1 * c[i])
+
+    # Maximum propagation speed
+    s_max = c + np.abs(u)
+
+    # Intermediate constants
+    s = np.transpose(np.vstack((0.5 * (eigenvalues[:, 0] + eigenvalues[:, 1]),
+                                0.5 * (eigenvalues[:, 0] - eigenvalues[:, 1]))))
+
+    g1 = (y - 1) * (np.multiply(qRoeSquared / 2, deltaState[:, 0]) -
+                    (np.multiply(roeAvgU, deltaState[:, 1]) + np.multiply(roeAvgV, deltaState[:, 2])) + deltaState[:,
+                                                                                                        3])
+    g2 = np.multiply(-u, deltaState[:, 0]) + (
+                np.multiply(deltaState[:, 1], norms[:, 0]) + np.multiply(deltaState[:, 2], norms[:, 1]))
+
+    c1 = np.multiply(np.divide(g1, np.multiply(c, c)), (s[:, 0] - eigenvalues[:, 2])) + np.multiply(np.divide(g2, c),
+                                                                                                    s[:, 1])
+    c2 = np.multiply(np.divide(g1, c), s[:, 1]) + np.multiply(s[:, 0] - eigenvalues[:, 2], g2)
+
+    # Euler Equation Fluxes
+    fluxLeft = fluxEuler[leftFilter, :, :]
+
+    fluxRight = fluxEuler[rightFilter, :, :]
+
+    fluxLeftx = np.transpose(np.vstack((fluxLeft[:, 0, 0] * norms[:, 0],
+                                        fluxLeft[:, 1, 0] * norms[:, 0],
+                                        fluxLeft[:, 2, 0] * norms[:, 0],
+                                        fluxLeft[:, 3, 0] * norms[:, 0])))
+
+    fluxLefty = np.transpose(np.vstack((fluxLeft[:, 0, 1] * norms[:, 1],
+                                        fluxLeft[:, 1, 1] * norms[:, 1],
+                                        fluxLeft[:, 2, 1] * norms[:, 1],
+                                        fluxLeft[:, 3, 1] * norms[:, 1])))
+
+    fluxLeft = fluxLeftx + fluxLefty
+
+    fluxRightx = np.transpose(np.vstack((fluxRight[:, 0, 0] * norms[:, 0],
+                                         fluxRight[:, 1, 0] * norms[:, 0],
+                                         fluxRight[:, 2, 0] * norms[:, 0],
+                                         fluxRight[:, 3, 0] * norms[:, 0])))
+
+    fluxRighty = np.transpose(np.vstack((fluxRight[:, 0, 1] * norms[:, 1],
+                                         fluxRight[:, 1, 1] * norms[:, 1],
+                                         fluxRight[:, 2, 1] * norms[:, 1],
+                                         fluxRight[:, 3, 1] * norms[:, 1])))
+
+    fluxRight = fluxRightx + fluxRighty
+
+    # Roe Flux
+    flux = 0.5 * (fluxLeft + fluxRight) - \
+           0.5 * np.transpose(np.vstack((np.multiply(eigenvalues[:, 2], deltaState[:, 0]) + c1,
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 1]) + np.multiply(c1, roeAvgU) + np.multiply(c2, norms[:, 0]),
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 2]) + np.multiply(c1, roeAvgV) + np.multiply(c2, norms[:, 1]),
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 3]) + np.multiply(c1, roeAvgEnthalpy) + np.multiply(c2, u))))
+
+    fluxResidual = np.transpose(np.vstack((np.multiply(flux[:, 0], lengths),
+                                           np.multiply(flux[:, 1], lengths),
+                                           np.multiply(flux[:, 2], lengths),
+                                           np.multiply(flux[:, 3], lengths))))
+
+    s_max = np.multiply(s_max, lengths)
+
+    # TODO: Why does this have to be a loop vs just doing += on the whole array?
+    for i in range(leftFilter.shape[0]):
+        internalResiduals[leftFilter[i]] += fluxResidual[i]
+        internalResiduals[rightFilter[i]] -= fluxResidual[i]
+
+        sumSL[leftFilter[i]] += s_max[i]
+        sumSL[rightFilter[i]] += s_max[i]
+
+    return internalResiduals, sumSL
 
 
-
-def freestreamBEFlux(BE, u, v, rho, rhoE, a, norms, lengths, freestreamState, y):
+@njit(cache=True)
+def inflowBEFlux(BE, state, u, v, sqrtRho, H, fluxEuler, norms, lengths, freestreamState, freestreamPressure, fluxFreestream, y):
     """Calculates all the wall fluxes for freestream boundary condition.
 
     Parameters
@@ -388,14 +462,132 @@ def freestreamBEFlux(BE, u, v, rho, rhoE, a, norms, lengths, freestreamState, y)
     :returns: 1). wallResidual - [:, 4] array of wall BE flux, mostly zeroes except for locations that are walls, 2). sumSL -
     sum of the propagation speeds for each cell
     """
-    wallResidual = np.zeros((u.shape[0], 4))
-    sumSL = np.zeros((u.shape[0]))
+    inflowResidual = np.zeros((u.shape[0], 4), dtype=np.float64)
+    sumSL = np.zeros((u.shape[0]), dtype=np.float64)
 
-    return wallResidual, sumSL
+    # Down-select to only location where the supersonic exit BC applies
+    if np.unique(BE[:, 3]).shape[0] == 3:
+        inflowBEFilter = BE[BE[:, 3] == 2, 2]
+        inflowNorms = norms[BE[:, 3] == 2, :]
+        inflowLengths = lengths[BE[:, 3] == 2]
+    else:
+        inflowBEFilter = BE[BE[:, 3] == 3, 2]
+        inflowNorms = norms[BE[:, 3] == 3, :]
+        inflowLengths = lengths[BE[:, 3] == 3]
+
+    freestreamStateArray = np.ones((inflowBEFilter.shape[0], 4), dtype=np.float64)
+    freestreamStateArray[:, 0] *= freestreamState[0]
+    freestreamStateArray[:, 1] *= freestreamState[1]
+    freestreamStateArray[:, 2] *= freestreamState[2]
+    freestreamStateArray[:, 3] *= freestreamState[3]
+
+    deltaState = freestreamStateArray - state[inflowBEFilter]
+
+    # "Left" is the interior state, while "right" is the freestream state
+    sqrtRhoLeft = sqrtRho[inflowBEFilter]
+    sqrtRhoRight = np.ones((sqrtRhoLeft.shape[0])) * np.sqrt(freestreamState[0])
+
+    uLeft = u[inflowBEFilter]
+    uRight = np.ones((sqrtRhoLeft.shape[0])) * freestreamState[1] / freestreamState[0]
+
+    vLeft = v[inflowBEFilter]
+    vRight = np.ones((sqrtRhoLeft.shape[0])) * freestreamState[2] / freestreamState[0]
+
+    enthalpyLeft = H[inflowBEFilter]
+    enthalpyRight = np.ones((sqrtRhoLeft.shape[0])) * (freestreamState[3] + freestreamPressure) / freestreamState[0]
+
+    # Roe-Average Quantities
+    roeAvgU = np.divide(np.multiply(sqrtRhoLeft, uLeft) + np.multiply(sqrtRhoRight, uRight), (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgV = np.divide(np.multiply(sqrtRhoLeft, vLeft) + np.multiply(sqrtRhoRight, vRight), (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgEnthalpy = np.divide(np.multiply(sqrtRhoLeft, enthalpyLeft) + np.multiply(sqrtRhoRight, enthalpyRight), (sqrtRhoLeft + sqrtRhoRight))
+    qRoeSquared = np.multiply(roeAvgU, roeAvgU) + np.multiply(roeAvgV, roeAvgV)
+
+    # Speed of Sound
+    c = np.sqrt((y - 1) * (roeAvgEnthalpy - qRoeSquared / 2))
+
+    # Local Speeds
+    u = np.multiply(roeAvgU, inflowNorms[:, 0]) + np.multiply(roeAvgV, inflowNorms[:, 1])
+
+    # System's eigenvalues
+    eigenvalues = np.transpose(np.abs(np.vstack((u + c, u - c, u))))
+
+    # Entropy fix
+    for i in range(eigenvalues.shape[0]):
+        for j in range(3):
+            if eigenvalues[i, j] < (0.05 * c[i]):
+                eigenvalues[i, j] = ((0.0025 * c[i] * c[i]) + (eigenvalues[i, j] * eigenvalues[i, j])) / (0.1 * c[i])
+
+    # Maximum propagation speed
+    s_max = c + np.abs(u)
+
+    # Intermediate constants
+    s = np.transpose(np.vstack((0.5 * (eigenvalues[:, 0] + eigenvalues[:, 1]),
+                               0.5 * (eigenvalues[:, 0] - eigenvalues[:, 1]))))
+
+    g1 = (y - 1) * (np.multiply(qRoeSquared / 2,  deltaState[:, 0]) -
+                   (np.multiply(roeAvgU, deltaState[:, 1]) + np.multiply(roeAvgV, deltaState[:, 2])) + deltaState[:, 3])
+    g2 = np.multiply(-u, deltaState[:, 0]) + (np.multiply(deltaState[:, 1], inflowNorms[:, 0]) + np.multiply(deltaState[:, 2], inflowNorms[:, 1]))
+
+    c1 = np.multiply(np.divide(g1, np.multiply(c, c)), (s[:, 0] - eigenvalues[:, 2])) + np.multiply(np.divide(g2, c), s[:, 1])
+    c2 = np.multiply(np.divide(g1, c), s[:, 1]) + np.multiply(s[:, 0] - eigenvalues[:, 2], g2)
+
+    # Euler Equation Fluxes
+    fluxLeft = fluxEuler[inflowBEFilter, :, :]
+
+    fluxRight = np.ones((inflowBEFilter.shape[0], 4, 2))
+    fluxRight[:, 0, :] *= fluxFreestream[0, :]
+    fluxRight[:, 1, :] *= fluxFreestream[1, :]
+    fluxRight[:, 2, :] *= fluxFreestream[2, :]
+    fluxRight[:, 3, :] *= fluxFreestream[3, :]
+
+    fluxLeftx = np.transpose(np.vstack((fluxLeft[:, 0, 0] * inflowNorms[:, 0],
+                fluxLeft[:, 1, 0] * inflowNorms[:, 0] ,
+                fluxLeft[:, 2, 0] * inflowNorms[:, 0] ,
+                fluxLeft[:, 3, 0] * inflowNorms[:, 0])))
+
+    fluxLefty = np.transpose(np.vstack((fluxLeft[:, 0, 1] * inflowNorms[:, 1],
+                fluxLeft[:, 1, 1] * inflowNorms[:, 1],
+                fluxLeft[:, 2, 1] * inflowNorms[:, 1] ,
+                fluxLeft[:, 3, 1] * inflowNorms[:, 1])))
+
+    fluxLeft = fluxLeftx + fluxLefty
+
+    fluxRightx = np.transpose(np.vstack((fluxRight[:, 0, 0] * inflowNorms[:, 0] ,
+                fluxRight[:, 1, 0] * inflowNorms[:, 0] ,
+                fluxRight[:, 2, 0] * inflowNorms[:, 0] ,
+                fluxRight[:, 3, 0] * inflowNorms[:, 0])))
+
+    fluxRighty = np.transpose(np.vstack((fluxRight[:, 0, 1] * inflowNorms[:, 1] ,
+                fluxRight[:, 1, 1] * inflowNorms[:, 1] ,
+                fluxRight[:, 2, 1] * inflowNorms[:, 1] ,
+                fluxRight[:, 3, 1] * inflowNorms[:, 1])))
+
+    fluxRight = fluxRightx + fluxRighty
+
+    # Roe Flux
+    flux = 0.5 * (fluxLeft + fluxRight) - \
+           0.5 * np.transpose(np.vstack((np.multiply(eigenvalues[:, 2], deltaState[:, 0]) + c1,
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 1]) + np.multiply(c1, roeAvgU) + np.multiply(c2, inflowNorms[:, 0]),
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 2]) + np.multiply(c1, roeAvgV) + np.multiply(c2, inflowNorms[:, 1]),
+                                         np.multiply(eigenvalues[:, 2], deltaState[:, 3]) + np.multiply(c1, roeAvgEnthalpy) + np.multiply(c2, u))))
+
+    fluxResidual = np.transpose(np.vstack((np.multiply(flux[:, 0], inflowLengths),
+                                          np.multiply(flux[:, 1], inflowLengths),
+                                          np.multiply(flux[:, 2], inflowLengths),
+                                          np.multiply(flux[:, 3], inflowLengths))))
+
+    s_max = np.multiply(s_max, inflowLengths)
+
+    # TODO: Why does this have to be a loop vs just doing += on the whole array?
+    for i in range(inflowBEFilter.shape[0]):
+        inflowResidual[inflowBEFilter[i]] += fluxResidual[i]
+        sumSL[inflowBEFilter[i]] += s_max[i]
+
+    return inflowResidual, sumSL
 
 
 @njit(cache=True)
-def supersonicExitBEFlux(BE, u, v, a, norms, lengths, fluxEuler):
+def outflowBEFlux(BE, state, u, v, sqrtRho, H, fluxEuler, norms, lengths, y):
     """Calculates all the wall fluxes for a supersonic exit boundary condition.
 
     Parameters
@@ -413,48 +605,190 @@ def supersonicExitBEFlux(BE, u, v, a, norms, lengths, fluxEuler):
     :returns: 1). exitResidual - [:, 4] array of wall BE flux, mostly zeroes except for locations that are walls, 2). sumSL -
     sum of the propagation speeds for each cell
     """
-    exitResidual = np.zeros((u.shape[0], 4))
-    sumSL = np.zeros((u.shape[0]))
+    outflowResidual = np.zeros((u.shape[0], 4), dtype=np.float64)
+    sumSL = np.zeros((u.shape[0]), dtype=np.float64)
 
     # Down-select to only location where the supersonic exit BC applies
     if np.unique(BE[:, 3]).shape[0] == 3:
         exitBEFilter = BE[BE[:, 3] == 1, 2]
+        exitNorms = norms[BE[:, 3] == 1, :]
+        exitLengths = lengths[BE[:, 3] == 1]
     else:
-        exitBEFilter = BE[np.logical_or(BE[:, 3] == 1, BE[:, 3] == 2), 2]
+        jointFilter = np.logical_or(BE[:, 3] == 1, BE[:, 3] == 2)
+        exitBEFilter = BE[jointFilter, 2]
+        exitNorms = norms[jointFilter, :]
+        exitLengths = lengths[jointFilter]
+
+    deltaState = state[exitBEFilter] - state[exitBEFilter]
+
+    # "Left" is the interior state, while "right" is the freestream state
+    sqrtRhoLeft = sqrtRho[exitBEFilter]
+    sqrtRhoRight = sqrtRho[exitBEFilter]
+
+    uLeft = u[exitBEFilter]
+    uRight = u[exitBEFilter]
+
+    vLeft = v[exitBEFilter]
+    vRight = v[exitBEFilter]
+
+    enthalpyLeft = H[exitBEFilter]
+    enthalpyRight = H[exitBEFilter]
+
+    # Roe-Average Quantities
+    roeAvgU = np.divide(np.multiply(sqrtRhoLeft, uLeft) + np.multiply(sqrtRhoRight, uRight), (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgV = np.divide(np.multiply(sqrtRhoLeft, vLeft) + np.multiply(sqrtRhoRight, vRight), (sqrtRhoLeft + sqrtRhoRight))
+    roeAvgEnthalpy = np.divide(np.multiply(sqrtRhoLeft, enthalpyLeft) + np.multiply(sqrtRhoRight, enthalpyRight), (sqrtRhoLeft + sqrtRhoRight))
+    qRoeSquared = np.multiply(roeAvgU, roeAvgU) + np.multiply(roeAvgV, roeAvgV)
+
+    # Speed of Sound
+    c = np.sqrt((y - 1) * (roeAvgEnthalpy - qRoeSquared / 2))
+
+    # Local Speeds
+    u = np.multiply(roeAvgU, exitNorms[:, 0]) + np.multiply(roeAvgV, exitNorms[:, 1])
+
+    # System's eigenvalues
+    eigenvalues = np.transpose(np.abs(np.vstack((u + c, u - c, u))))
+
+    # Entropy fix
+    for i in range(eigenvalues.shape[0]):
+        for j in range(3):
+            if eigenvalues[i, j] < (0.05 * c[i]):
+                eigenvalues[i, j] = ((0.0025 * c[i] * c[i]) + (eigenvalues[i, j] * eigenvalues[i, j])) / (0.1 * c[i])
+
+    # Maximum propagation speed
+    s_max = c + np.abs(u)
+
+    # Intermediate constants
+    s = np.transpose(np.vstack((0.5 * (eigenvalues[:, 0] + eigenvalues[:, 1]),
+                               0.5 * (eigenvalues[:, 0] - eigenvalues[:, 1]))))
+
+    g1 = (y - 1) * (np.multiply(qRoeSquared / 2,  deltaState[:, 0]) -
+                   (np.multiply(roeAvgU, deltaState[:, 1]) + np.multiply(roeAvgV, deltaState[:, 2])) + deltaState[:, 3])
+    g2 = np.multiply(-u, deltaState[:, 0]) + (np.multiply(deltaState[:, 1], exitNorms[:, 0]) + np.multiply(deltaState[:, 2], exitNorms[:, 1]))
+
+    c1 = np.multiply(np.divide(g1, np.multiply(c, c)), (s[:, 0] - eigenvalues[:, 2])) + np.multiply(np.divide(g2, c), s[:, 1])
+    c2 = np.multiply(np.divide(g1, c), s[:, 1]) + np.multiply(s[:, 0] - eigenvalues[:, 2], g2)
+
+    # Euler Equation Fluxes
+    fluxLeft = fluxEuler[exitBEFilter, :, :]
+
+    fluxRight = fluxEuler[exitBEFilter, :, :]
+
+    fluxLeftx = np.transpose(np.vstack((fluxLeft[:, 0, 0] * exitNorms[:, 0],
+                fluxLeft[:, 1, 0] * exitNorms[:, 0] ,
+                fluxLeft[:, 2, 0] * exitNorms[:, 0] ,
+                fluxLeft[:, 3, 0] * exitNorms[:, 0])))
+
+    fluxLefty = np.transpose(np.vstack((fluxLeft[:, 0, 1] * exitNorms[:, 1],
+                fluxLeft[:, 1, 1] * exitNorms[:, 1],
+                fluxLeft[:, 2, 1] * exitNorms[:, 1] ,
+                fluxLeft[:, 3, 1] * exitNorms[:, 1])))
+
+    fluxLeft = fluxLeftx + fluxLefty
+
+    fluxRightx = np.transpose(np.vstack((fluxRight[:, 0, 0] * exitNorms[:, 0] ,
+                fluxRight[:, 1, 0] * exitNorms[:, 0] ,
+                fluxRight[:, 2, 0] * exitNorms[:, 0] ,
+                fluxRight[:, 3, 0] * exitNorms[:, 0])))
+
+    fluxRighty = np.transpose(np.vstack((fluxRight[:, 0, 1] * exitNorms[:, 1] ,
+                fluxRight[:, 1, 1] * exitNorms[:, 1] ,
+                fluxRight[:, 2, 1] * exitNorms[:, 1] ,
+                fluxRight[:, 3, 1] * exitNorms[:, 1])))
+
+    fluxRight = fluxRightx + fluxRighty
+
+    # Roe Flux
+    flux = 0.5 * (fluxLeft + fluxRight) - \
+           0.5 * np.transpose(np.vstack((np.multiply(eigenvalues[:, 2], deltaState[:, 0]) + c1,
+                              np.multiply(eigenvalues[:, 2], deltaState[:, 1]) + np.multiply(c1, roeAvgU) + np.multiply(c2, exitNorms[:, 0]),
+                              np.multiply(eigenvalues[:, 2], deltaState[:, 2]) + np.multiply(c1, roeAvgV) + np.multiply(c2, exitNorms[:, 1]),
+                              np.multiply(eigenvalues[:, 2], deltaState[:, 3]) + np.multiply(c1, roeAvgEnthalpy) + np.multiply(c2, u))))
+
+    fluxResidual = np.transpose(np.vstack((np.multiply(flux[:, 0], exitLengths),
+                                          np.multiply(flux[:, 1], exitLengths),
+                                          np.multiply(flux[:, 2], exitLengths),
+                                          np.multiply(flux[:, 3], exitLengths))))
+
+    s_max = np.multiply(s_max, exitLengths)
+
+    # TODO: Why does this have to be a loop vs just doing += on the whole array?
+    for i in range(exitBEFilter.shape[0]):
+        outflowResidual[exitBEFilter[i]] += fluxResidual[i]
+        sumSL[exitBEFilter[i]] += s_max[i]
+
+    return outflowResidual, sumSL
+
+
+@njit(cache=True)
+def outflowBEFluxFast(BE, u, v, a, fluxEuler, norms, lengths):
+    """Calculates all the wall fluxes for a supersonic exit boundary condition.
+
+    Parameters
+    ----------
+    :param BE: [:, 4] Numpy array of boundary edge information [nodeA, nodeB, cell i, BE flag]
+    :param u: [:, 1] Numpy array of x-dir velocities
+    :param v: [:, 1] Numpy array of y-dir velocities
+    :param a: [:, 1] Numpy array of local speed of sounds
+    :param norms: [:, 2] Numpy array of normal vectors for the edges
+    :param lengths: [:, 1] NUmpy array of edge lengths
+    :param fluxEuler: [:, 4, 2] Numpy array of euler fluxes, first col is cell index, second is flux, third is direction
+
+    Returns
+    -------
+    :returns: 1). exitResidual - [:, 4] array of wall BE flux, mostly zeroes except for locations that are walls, 2). sumSL -
+    sum of the propagation speeds for each cell
+    """
+    outflowResidual = np.zeros((u.shape[0], 4), dtype=np.float64)
+    sumSL = np.zeros((u.shape[0]), dtype=np.float64)
+
+    # Down-select to only location where the supersonic exit BC applies
+    if np.unique(BE[:, 3]).shape[0] == 3:
+        exitBEFilter = BE[BE[:, 3] == 1, 2]
+        exitNorms = norms[BE[:, 3] == 1, :]
+        exitLengths = lengths[BE[:, 3] == 1]
+    else:
+        jointFilter = np.logical_or(BE[:, 3] == 1, BE[:, 3] == 2)
+        exitBEFilter = BE[jointFilter, 2]
+        exitNorms = norms[jointFilter, :]
+        exitLengths = lengths[jointFilter]
+
 
     uExitBE = u[exitBEFilter]
     vExitBE = v[exitBEFilter]
     aExitBE = a[exitBEFilter]
-    normExitBE = norms[BE[:, 3] == 1, :]
-    lengthExitBE = lengths[BE[:, 3] == 1]
     fluxEulerExitBE = fluxEuler[exitBEFilter]
 
-    # All the simplifications show that the Roe-flux simplifies into the Euler Flux when the two states are identical
-    exitFlux = np.vstack((np.multiply(fluxEulerExitBE[:, 0, 0], normExitBE[:, 0]) +
-                          np.multiply(fluxEulerExitBE[:, 0, 1], normExitBE[:, 1]),
-                         np.multiply(fluxEulerExitBE[:, 1, 0], normExitBE[:, 0]) +
-                          np.multiply(fluxEulerExitBE[:, 1, 1], normExitBE[:, 1]),
-                         np.multiply(fluxEulerExitBE[:, 2, 0], normExitBE[:, 0]) +
-                          np.multiply(fluxEulerExitBE[:, 2, 1], normExitBE[:, 1]),
-                         np.multiply(fluxEulerExitBE[:, 3, 0], normExitBE[:, 0]) +
-                          np.multiply(fluxEulerExitBE[:, 3, 1], normExitBE[:, 1])))
-    exitFlux = np.transpose(exitFlux)
-
-    for i in range(exitFlux.shape[0]):
-        exitFlux[i, :] *= lengthExitBE[i]
-
-    exitResidual[exitBEFilter] += exitFlux
-
     # Local speed
-    u = np.multiply(uExitBE, normExitBE[:, 0]) + np.multiply(vExitBE, normExitBE[:, 1])
+    u = np.multiply(uExitBE, exitNorms[:, 0]) + np.multiply(vExitBE, exitNorms[:, 1])
 
     # Maximum propagation speed
     s_max = aExitBE + np.abs(u)
 
-    sumSLTemp = np.multiply(s_max, lengthExitBE)
-    sumSL[exitBEFilter] += sumSLTemp
+    # All the simplifications show that the Roe-flux simplifies into the Euler Flux when the two states are identical
+    flux = np.vstack((np.multiply(fluxEulerExitBE[:, 0, 0], exitNorms[:, 0]) +
+                          np.multiply(fluxEulerExitBE[:, 0, 1], exitNorms[:, 1]),
+                          np.multiply(fluxEulerExitBE[:, 1, 0], exitNorms[:, 0]) +
+                          np.multiply(fluxEulerExitBE[:, 1, 1], exitNorms[:, 1]),
+                          np.multiply(fluxEulerExitBE[:, 2, 0], exitNorms[:, 0]) +
+                          np.multiply(fluxEulerExitBE[:, 2, 1], exitNorms[:, 1]),
+                          np.multiply(fluxEulerExitBE[:, 3, 0], exitNorms[:, 0]) +
+                          np.multiply(fluxEulerExitBE[:, 3, 1], exitNorms[:, 1])))
+    flux = np.transpose(flux)
 
-    return exitResidual, sumSL
+    fluxResidual = np.transpose(np.vstack((np.multiply(flux[:, 0], exitLengths),
+                                          np.multiply(flux[:, 1], exitLengths),
+                                          np.multiply(flux[:, 2], exitLengths),
+                                          np.multiply(flux[:, 3], exitLengths))))
+
+    s_max = np.multiply(s_max, exitLengths)
+
+    # TODO: Why does this have to be a loop vs just doing += on the whole array?
+    for i in range(exitBEFilter.shape[0]):
+        outflowResidual[exitBEFilter[i]] += fluxResidual[i]
+        sumSL[exitBEFilter[i]] += s_max[i]
+
+    return outflowResidual, sumSL
 
 @njit(cache=True)
 def wallBEFlux(BE, u, v, rho, rhoE, a, norms, lengths, y):
@@ -477,8 +811,8 @@ def wallBEFlux(BE, u, v, rho, rhoE, a, norms, lengths, y):
     :returns: 1). wallResidual - [:, 4] array of wall BE flux, mostly zeroes except for locations that are walls, 2). sumSL -
     sum of the propagation speeds for each cell
     """
-    wallResidual = np.zeros((u.shape[0], 4))
-    sumSL = np.zeros((u.shape[0]))
+    wallResidual = np.zeros((u.shape[0], 4), dtype=np.float64)
+    sumSL = np.zeros((u.shape[0]), dtype=np.float64)
 
     # Filtering down to the wall boundary edges
     wallBEFilter = BE[BE[:, 3] == 0, 2]
