@@ -2,12 +2,10 @@ import cell_geometry_formulas as cgf
 from numba import njit
 import numpy as np
 import helper
-import flux_roe
-import flux_hlle
-
+import time_integration
 
 @njit(cache=True)
-def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, convergenceTolerance, smartMinConvTol,
+def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, timeMethod, convergenceMethod, convergenceTolerance, smartMinConvTol,
                 smartConvAscLen, smartConvASCAvgTol, smartASCsToCheck):
     """Runs steady state Euler equation solver in 2D based on the given
     setup information such as mesh, fluid information, program configurations, etc.
@@ -21,6 +19,7 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, con
     :param a: Freestream angle of attack
     :param y: Ratio of specific heats - gamma
     :param fluxMethod: Flux method identifier
+    :param timeMethod: Time integration method
     :param convergenceMethod: Convergence method identifier
     :param convergenceTolerance: Standard/backup convergence method tolerance
     :param smartMinConvTol: Smart convergence minimum tolerance
@@ -47,6 +46,7 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, con
     # TODO: Apply vectorized form in locations where un-vectorized form exists
     beLength, beNorm = cgf.edgePropertiesCalculator(BE[:, 0:2], V)
     ieLength, ieNorm = cgf.edgePropertiesCalculator(IE[:, 0:2], V)
+    areas = cgf.areaCalculator(E, V)
 
     # Reset the residual and timestep arrays
     residuals = np.zeros((E.shape[0], 4))  # Residuals from fluxes
@@ -63,13 +63,15 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, con
             print("Iteration: ", iterationNumber, "\t L1 Residual Norm:", printResidual)
 
         # If-elif-else tree for flux method selection
-        if fluxMethod == 1:
-            residuals, sumSL = flux_roe.compResidualsRoeVectorized(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
-        elif fluxMethod == 2:
-            residuals, sumSL = flux_hlle.compute_residuals_hlle(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
-        # If it cannot find the right flux method, it will default to the Roe Flux
+        if timeMethod == 1:
+            residuals = \
+                time_integration.updateStateRK1(IE, BE, state, beLength, beNorm, ieLength, ieNorm, areas, cfl, M, a, y)
+        elif timeMethod == 2:
+            residuals = \
+                time_integration.updateStateRK2(IE, BE, state, beLength, beNorm, ieLength, ieNorm, areas, cfl, M, a, y)
         else:
-            residuals, sumSL = flux_roe.compResidualsRoeVectorized(IE, BE, state, beLength, beNorm, ieLength, ieNorm, M, a, y)
+            residuals = \
+                time_integration.updateStateRK4(IE, BE, state, beLength, beNorm, ieLength, ieNorm, areas, cfl, M, a, y)
 
         cont_norm = (np.abs(residuals[:, 0])).sum()
         xmom_norm = (np.abs(residuals[:, 1])).sum()
@@ -87,10 +89,6 @@ def euler_2D_v2(E, V, BE, IE, state, M, a, y, fluxMethod, convergenceMethod, con
         atpr = helper.calculate_atpr(V, BE, stagnation_pressure)
         cd, cl = helper.calculate_forces(V, BE, state, M, a, y)
         coefficients = np.vstack((coefficients, np.reshape(np.array((cd, cl, atpr)), (1, 3))))
-
-        # Calculate delta_t and timestep forward the local states
-        deltat_deltaa = np.divide(2 * cfl, sumSL)
-        state -= np.transpose(np.multiply(deltat_deltaa, np.transpose(residuals)))
 
         # Check for convergence, if not converged update the ASCs and iterate
         converged, ascs = checkConvergence(convergenceMethod, residualNorms, cl, cd, atpr, ascs, smartASCsToCheck,

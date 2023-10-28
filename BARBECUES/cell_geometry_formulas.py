@@ -42,9 +42,9 @@ def areaCalculator(E, V):
     :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :returns: Area - [:, 1] Numpy array of area of the cells
     """
-    edgeLengthA, _ = edgePropertiesCalculator(E[:, (0, 1)], V)
-    edgeLengthB, _ = edgePropertiesCalculator(E[:, (1, 2)], V)
-    edgeLengthC, _ = edgePropertiesCalculator(E[:, (2, 0)], V)
+    edgeLengthA, _ = edgePropertiesCalculator(E[:, 0:2], V)
+    edgeLengthB, _ = edgePropertiesCalculator(E[:, 1::], V)
+    edgeLengthC, _ = edgePropertiesCalculator(E[:, 2::-2], V)
 
     s = (edgeLengthA + edgeLengthB + edgeLengthC) / 2
 
