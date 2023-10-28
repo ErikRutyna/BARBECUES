@@ -1,8 +1,8 @@
 import numpy as np
+from numba import njit
 from scipy import sparse
-import cell_geometry_formulas as cgf
 import math
-import flux
+import flux_roe
 
 
 def edgehash2(E, B):
@@ -52,6 +52,20 @@ def edgehash2(E, B):
 
     return IE, BE
 
+
+@njit(cache=True)
+def edge_properties_calculator(node_a, node_b):
+    """ Calculates the length and CCW norm out of a single edge
+
+    :param node_a: X-Y Coordinates of node A
+    :param node_b: X-Y Coordinates of node B
+    :returns: length: Length of the edge from A->B, norm: Normal vector out of the edge in CCW fashion: [nx, ny]
+    """
+
+    length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
+    norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
+
+    return length, norm
 
 # The following functions were written by Krzysztof J. Fidkowski @ University of Michigan
 #-----------------------------------------------------------
@@ -168,13 +182,13 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
         if Mesh['Bname'][be[3]] == 'Inflow' or Mesh['Bname'][be[3]] == 'Outflow':
             continue
         else:
-            be_l, be_n = cgf.edge_properties_calculator(Mesh['V'][be[0]], Mesh['V'][be[1]])
+            be_l, be_n = edge_properties_calculator(Mesh['V'][be[0]], Mesh['V'][be[1]])
 
             # Cell i quantities
             u = U[be[2]][1] / U[be[2]][0]
             v = U[be[2]][2] / U[be[2]][0]
             q = np.dot(be_n, np.array([u, v]))
-            flux_c = flux.stateFluxEuler2D(U[be[2]], config)
+            flux_c = flux_roe.stateFluxEuler2D(U[be[2]], config)
             h_l = (flux_c[3, 0] + flux_c[3, 1]) / ( flux_c[0, 0] + flux_c[0, 1])
             c = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
 
@@ -186,14 +200,14 @@ def adapt(Mesh, U, saveprefix, iadapt, config):
     for i in range(len(Mesh['IE'])):
         # Internal Edges
         ie = Mesh['IE'][i]
-        ie_l, ie_n = cgf.edge_properties_calculator(Mesh['V'][ie[0]], Mesh['V'][ie[1]])
+        ie_l, ie_n = edge_properties_calculator(Mesh['V'][ie[0]], Mesh['V'][ie[1]])
 
         # Left cell/cell i quantities
         u_l = U[ie[2]]
         u_l_u = u_l[1] / u_l[0]
         u_l_v = u_l[2] / u_l[0]
         q_l = np.linalg.norm([u_l_u, u_l_v])
-        flux_l = flux.stateFluxEuler2D(u_l, config)
+        flux_l = flux_roe.stateFluxEuler2D(u_l, config)
         h_l = (flux_l[3, 0] + flux_l[3, 1]) / ( flux_l[0, 0] + flux_l[0, 1])
         c_l = math.sqrt((config.y - 1) * (h_l - q ** 2 / 2))
         m_l = q_l / c_l

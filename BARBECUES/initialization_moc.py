@@ -7,6 +7,7 @@ import plotting
 import math
 
 
+# TODO: Revisit this whole file/init condition and update it and make it work - its a novel concept, I bet it can be worked to find some very good value
 def initialize_moc(E, V, BE, M, a, y):
     """Initializes the initial state using characteristic lines to approximate oblique shock locations and initializes
     the solution using those oblique shocks. FLOW MUST GO FROM LEFT TO RIGHT as it uses the left running characteristic

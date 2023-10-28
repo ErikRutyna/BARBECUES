@@ -11,50 +11,49 @@ def centroid(E, V):
     :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :returns: [:, 2] Numpy array of x-y coordinates of the centroids of all cells
     """
-    centroids = np.zeros((E.shape[0], 2))
-
-    for i in range(centroids.shape[0]):
-        c1 = V[E[i, 0], :]
-        c2 = V[E[i, 1], :]
-        c3 = V[E[i, 2], :]
-        centroids[i] = np.divide(np.add(c1, np.add(c2, c3)), 3)
+    centroids = (V[E[:, 0]] + V[E[:, 1]] + V[E[:, 2]]) / 3
 
     return centroids
 
 
 @njit(cache=True)
-def edge_properties_calculator(node_a, node_b):
-    """ Calculates the length and CCW norm out of a single edge
+def edgePropertiesCalculator(edgeIndices, V):
+    """ Calculates the length and CCW norm out of a single edge for a set of edges defined by edgeIndices
 
-    :param node_a: X-Y Coordinates of node A
-    :param node_b: X-Y Coordinates of node B
+    :param edgeIndices: [:, 2] Numpy array of indices in V, [nodeA, nodeB]
+    :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :returns: length: Length of the edge from A->B, norm: Normal vector out of the edge in CCW fashion: [nx, ny]
     """
+    deltaX = V[edgeIndices[:, 0], 0] - V[edgeIndices[:, 1], 0]
+    deltaY = V[edgeIndices[:, 0], 1] - V[edgeIndices[:, 1], 1]
 
-    length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
-    norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
+    length = np.sqrt(np.multiply(deltaX, deltaX) + np.multiply(deltaY, deltaY))
 
+    norm = np.vstack((np.divide(-deltaY, length), np.divide(deltaX, length)))
+    norm = np.transpose(norm)
     return length, norm
 
 
 @njit(cache=True)
-def area_calculator(E, V):
+def areaCalculator(E, V):
     """Calculates the area of the two triangular cells for the given indices.
 
     :param E: [:, 3] Numpy array of the Element-2-Node hashing
     :param V: [:, 2] Numpy array of x-y coordinates of node locations
     :returns: Area - [:, 1] Numpy array of area of the cells
     """
-    area = np.zeros(E.shape[0])
-    for i in range(E.shape[0]):
-        nodes = E[i]
-        # https://en.wikipedia.org/wiki/Heron%27s_formula
-        # print(cellIndex)
-        a, _ = edge_properties_calculator(V[nodes[0]], V[nodes[1]])
-        b, _ = edge_properties_calculator(V[nodes[1]], V[nodes[2]])
-        c, _ = edge_properties_calculator(V[nodes[2]], V[nodes[0]])
+    edgeLengthA, _ = edgePropertiesCalculator(E[:, 0:2], V)
+    edgeLengthB, _ = edgePropertiesCalculator(E[:, 1::], V)
+    edgeLengthC, _ = edgePropertiesCalculator(E[:, 2::-2], V)
 
-        s = (a + b + c) / 2
+    s = (edgeLengthA + edgeLengthB + edgeLengthC) / 2
 
-        area[i] = np.sqrt(s * (s - a) * (s - b) * (s - c))
+    sMinusA = s - edgeLengthA
+    sMinusB = s - edgeLengthB
+    sMinusC = s - edgeLengthC
+
+    area = np.sqrt(np.multiply(s,
+                               np.multiply(sMinusA,
+                                           np.multiply(sMinusB, sMinusC))))
+
     return area

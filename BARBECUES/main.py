@@ -11,8 +11,6 @@ import postprocess as pop
 import shutil
 
 
-# TODO: Comb over the entire code and look for optimizations
-# TODO: Comb over the code and apply Python linting style where appropriate
 def main():
     """This main function executes the BARBEQUES Euler Solver. General process
     follows this pattern:
@@ -62,6 +60,7 @@ def main():
                                                                  config['angle_of_attack'],
                                                                  config['y'],
                                                                  config['flux_method'],
+                                                                 config['time_method'],
                                                                  config['convergence_method'],
                                                                  config['convergence_minimum'],
                                                                  config['smart_convergence_minimum'],
@@ -106,6 +105,7 @@ def main():
                                                                      config['angle_of_attack'],
                                                                      config['y'],
                                                                      config['flux_method'],
+                                                                     config['time_method'],
                                                                      config['convergence_method'],
                                                                      config['convergence_minimum'],
                                                                      config['smart_convergence_minimum'],
