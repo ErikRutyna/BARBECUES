@@ -1,4 +1,3 @@
-from skaero.atmosphere import coesa
 import compressible_flow_formulas as cff
 import math
 import json
@@ -26,9 +25,8 @@ def preprocess():
     fluid_con['R'] = 8.31446261815324 / fluid_con['MW']
 
     # Add freestream atmospheric conditions to the flight_con
-    _, temp, pres, _ = coesa.table(flight_con['altitude'])
-    flight_con['tinf'] = temp
-    flight_con['pinf'] = pres
+    flight_con['tinf'] = 300
+    flight_con['pinf'] = 20000
     flight_con['r_inf'] = flight_con['pinf'] / (fluid_con['R'] * flight_con['tinf'])
     flight_con['U_inf'] = flight_con['freestream_mach_numer'] * math.sqrt(
         fluid_con['y'] * fluid_con['R'] * flight_con['tinf'])
