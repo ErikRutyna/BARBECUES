@@ -9,7 +9,7 @@ import initialization as intlzn
 import preprocess as pp
 import postprocess as pop
 import shutil
-
+import unstructuredMesh
 
 def main():
     """This main function executes the BARBEQUES Euler Solver. General process
@@ -33,6 +33,7 @@ def main():
 
     # Grid Loading
     mesh = readgri.readgri(config['mesh_path'])
+    demoMesh = unstructuredMesh.UnstructuredMesh(config['mesh_path'])
 
     # Initialization is done based on the method supplied by the config
     stateVectors = intlzn.init_state(mesh, config)
@@ -69,6 +70,8 @@ def main():
                                                                  np.array(config['smart_convergence_ascs']))
     residuals = np.vstack((residuals, flowfieldResiduals))
     coefficients = np.vstack((coefficients, aerodynamicCoefficients))
+
+
 
     # If we want restart files of the solved flow field, save them here
     if config['restart_files']:
