@@ -27,6 +27,9 @@ class UnstructuredMesh:
         # Cell Area Information
         self.cellArea = self.cellAreaCalculator(self.elements, self.nodes)
 
+        # Pointer to the corresponding flow field
+        self.flowfield = None
+
     def edgePropertiesCalculator(self, edgeIndices, nodes):
         return self.edgePropertiesCalculatorNJIT(edgeIndices, nodes)
 
@@ -71,6 +74,9 @@ class UnstructuredMesh:
         sMinusC = s - c
 
         return np.sqrt(np.multiply(s, np.multiply(sMinusA, np.multiply(sMinusB, sMinusC))))
+
+    def addFlowfield(self, newFlowfield):
+        self.flowfield = newFlowfield
 
     # ---------------------------------------------------------------------------------------
     # The following functions were written by Krzysztof J. Fidkowski @ University of Michigan
