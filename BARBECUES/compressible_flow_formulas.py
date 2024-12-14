@@ -5,188 +5,188 @@ import numpy as np
 
 # A collection of compressible flow formulas coded while taking Aerospace 520 @ University of Michigan that are used
 # once/twice in the code base.
-def f(beta, theta, M1, gamma):
+def f(turnAngle, rampAngle, machNumber, gamma):
     """theta-beta-Mach formula except the returned result is the LHS - RHS.
 
-    :param beta: turning angle in radians
-    :param theta: flow turning angle in radians
-    :param M1: upstream of shock Mach number
+    :param turnAngle: turning angle in radians
+    :param rampAngle: flow turning angle in radians
+    :param machNumber: upstream of shock Mach number
     :param gamma: ratio of specific heats
     :return: fout = LHS - RHS of the theta-beta-Mach formula
     """
-    numerator = M1 ** 2 * np.sin(beta) ** 2 - 1
-    denominator = M1 ** 2 * (gamma + np.cos(2 * beta)) + 2
+    numerator = machNumber ** 2 * np.sin(turnAngle) ** 2 - 1
+    denominator = machNumber ** 2 * (gamma + np.cos(2 * turnAngle)) + 2
 
-    fout = 2 * (np.tan(beta)) ** -1 * numerator / denominator - np.tan(theta)
+    fout = 2 * (np.tan(turnAngle)) ** -1 * numerator / denominator - np.tan(rampAngle)
 
     return fout
 
 
-def fp(beta, M1, gamma):
+def fp(turnAngle, machNumber, gamma):
     """Derivative of the LHS - RHS of the theta-beta-Mach formula.
 
-    :param beta: turning angle in radians
-    :param M1: upstream of shock Mach number
+    :param turnAngle: turning angle in radians
+    :param machNumber: upstream of shock Mach number
     :param gamma: ratio of specific heats
     :return: fout = LHS - RHS of the derivative theta-beta-Mach formula
     """
 
-    h = 2 * np.tan(beta) ** -1
-    hp = -2 * math.sin(beta) ** -2
+    h = 2 * np.tan(turnAngle) ** -1
+    hp = -2 * math.sin(turnAngle) ** -2
 
-    u = M1 ** 2 * math.sin(beta) ** 2 - 1
-    up = M1 ** 2 * math.sin(2 * beta)
+    u = machNumber ** 2 * math.sin(turnAngle) ** 2 - 1
+    up = machNumber ** 2 * math.sin(2 * turnAngle)
 
-    v = M1 ** 2 * (gamma + np.cos(2 * beta)) + 2
-    vp = -2 * M1 ** 2 * math.sin(2 * beta)
+    v = machNumber ** 2 * (gamma + np.cos(2 * turnAngle)) + 2
+    vp = -2 * machNumber ** 2 * math.sin(2 * turnAngle)
 
     fout = hp * u / v + h * (v * up - vp * u) / v ** 2
 
     return fout
 
 
-def solvebeta(theta, M1, gamma):
+def solvebeta(rampAngle, machNumber, gamma):
     """Solves for the flow turning angle of the theta-beta-Mach formula.
 
-    :param theta: turning angle
-    :param M1: upstream of shock Mach number
+    :param rampAngle: turning angle
+    :param machNumber: upstream of shock Mach number
     :param gamma: ratio of specific heats
     :return: turning angle (beta)
     """
     # Edge case - no turning angle -> normal shock
-    if theta == 0:
+    if rampAngle == 0:
         beta = np.pi / 2
         return beta
 
     # Initial guess for beta
-    beta = theta * np.pi / 180
+    beta = rampAngle * np.pi / 180
 
     # 100 iterations of Newton-Raphson for root finder to get the value of beta that best fits the t-b-M relationship
     for i in range(100):
-        beta = beta - f(beta, theta, M1, gamma) / fp(beta, M1, gamma)
+        beta = beta - f(beta, rampAngle, machNumber, gamma) / fp(beta, machNumber, gamma)
 
     return beta
 
 
-def pratio(M, gamma):
+def pratio(machNumber, gamma):
     """Normal shock pressure ratio (p2/p1 - downstream/upstream)
 
-    :param M: upstream Mach number
+    :param machNumber: upstream Mach number
     :param gamma: ratio of specific heats
     :return: pressure ratio of downstream/upstream pressures (p2/p1)
     """
-    pr = 1 + 2 * gamma / (gamma + 1) * ( M**2.0 - 1)
+    pr = 1 + 2 * gamma / (gamma + 1) * (machNumber ** 2.0 - 1)
     return pr
 
 
-def rratio(M, gamma):
+def rratio(machNumber, gamma):
     """Normal shock density ratio (rho2/rho1 - downstream/upstream)
 
-    :param M: upstream Mach number
+    :param machNumber: upstream Mach number
     :param gamma: ratio of specific heats
     :return: Density ratio of downstream/upstream densities (rho2/rho1)
     """
-    rr = (gamma + 1) * M**2.0 / ((gamma - 1) * M**2.0 + 2.0)
+    rr = (gamma + 1) * machNumber ** 2.0 / ((gamma - 1) * machNumber ** 2.0 + 2.0)
     return rr
 
 
-def tratio(M, gamma):
+def tratio(machNumber, gamma):
     """Normal shock temperature ratio (t2/t1 - downstream/upstream)
 
-    :param M: upstream Mach number
+    :param machNumber: upstream Mach number
     :param gamma: ratio of specific heats
     :return: Temperature ratio of downstream/upstream temperatures (t2/t1)
     """
-    pr = pratio(M,gamma)
-    rr = rratio(M,gamma)
+    pr = pratio(machNumber, gamma)
+    rr = rratio(machNumber, gamma)
     tr = pr/rr
     return tr
 
 
-def Mpost(M, gamma):
+def Mpost(machNumber, gamma):
     """Mach number post normal shock
 
-    :param M: upstream Mach number
+    :param machNumber: upstream Mach number
     :param gamma: ratio of specific heats
     :return: Mach number post normal shock
     """
-    num = M**2.0 + (2.0/(gamma-1))
-    den = 2.0*gamma/(gamma-1)*M**2.0 -1
+    num = machNumber ** 2.0 + (2.0 / (gamma - 1))
+    den = 2.0 * gamma / (gamma-1) * machNumber ** 2.0 - 1
     return (num/den)**0.5
 
 
-def p0(p, M, gamma):
+def p0(staticPressure, machNumber, gamma):
     """Stagnation pressure calculator, use a value of p=1 to return stagnation pressure ratio (p0/p - stagnation/static)
 
-    :param p: local static pressure
-    :param M: local static Mach number
+    :param staticPressure: local static pressure
+    :param machNumber: local static Mach number
     :param gamma: ratio of specific heats
     :return: Stagnation pressure p0
     """
-    ratio = (1 + (gamma - 1) / 2.0 * M ** 2.0) ** (gamma / (gamma - 1))
-    return ratio*p
+    ratio = (1 + (gamma - 1) / 2.0 * machNumber ** 2.0) ** (gamma / (gamma - 1))
+    return ratio*staticPressure
 
 
-def T0(T, M, gamma):
+def T0(staticTemperature, machNumber, gamma):
     """Stagnation temperature calculator, use a value of T=1 to return stagnation temperature ratio
     (T0/T - stagnation/static)
 
-    :param T: local static temperature
-    :param M: local static Mach number
+    :param staticTemperature: local static temperature
+    :param machNumber: local static Mach number
     :param gamma: ratio of specific heats
     :return: Stagnation temperature T0
     """
-    ratio = (1 + (gamma-1)/2.0*M**2.0)
-    return ratio*T
+    ratio = (1 + (gamma-1) / 2.0 * machNumber ** 2.0)
+    return ratio*staticTemperature
 
 
-def r0(r, M, gamma):
+def r0(staticDensity, machNumber, gamma):
     """Stagnation density calculator, use a value of r=1 to return stagnation density ratio (r0/r - stagnation/static)
 
-    :param r: local static density
-    :param M: local static Mach number
+    :param staticDensity: local static density
+    :param machNumber: local static Mach number
     :param gamma: ratio of specific heats
     :return: Stagnation density r0
     """
-    ratio = (1 + (gamma-1)/2.0*M**2.0)**(1.0/(gamma-1))
-    return ratio*r
+    ratio = (1 + (gamma-1) / 2.0 * machNumber ** 2.0) ** (1.0 / (gamma - 1))
+    return ratio*staticDensity
 
 
-def obliqueshock(theta, M1, p1, T1, r1, gamma):
+def obliqueshock(rampAngle, machNumber, upstreamStaticPressure, upstreamStaticTemperature, upstreamStaticDensity, gamma):
     """Given an initial fluid dynamic state (M1, p1, T1, r1) and a ramp angle (theta), return a dictionary consisting of
     the post-oblique shock state (M2, p2, T2, r2, p02, T02), as well as normal Mach numbers (Mn1 and Mn2).
 
-    :param theta: ramp angle in radians
-    :param M1: upstream Mach number
-    :param p1: upstream static pressure
-    :param T1: upstream static temperature
-    :param r1: upstream static density
+    :param rampAngle: ramp angle in radians
+    :param machNumber: upstream Mach number
+    :param upstreamStaticPressure: upstream static pressure
+    :param upstreamStaticTemperature: upstream static temperature
+    :param upstreamStaticDensity: upstream static density
     :param gamma: ratio of specific heats
     :return: result - A dictionary consisting of the listed state values that can be indexed with result["state"]
     """
     result = {}
 
     # Solve for turning angle for given upstream state
-    beta = solvebeta(theta, M1, gamma)
+    beta = solvebeta(rampAngle, machNumber, gamma)
     result['beta'] = beta
 
     # Normal Mach #
-    Mn1 = M1 * math.sin(beta)
+    Mn1 = machNumber * math.sin(beta)
 
     # Post shock Mach
     Mn2 = Mpost(Mn1, gamma)
-    M2 = Mn2 / math.sin(beta - theta)
+    M2 = Mn2 / math.sin(beta - rampAngle)
 
     # Post shock state
-    p2 = pratio(Mn1, gamma) * p1
-    T2 = tratio(Mn1, gamma) * T1
-    r2 = rratio(Mn1, gamma) * r1
+    p2 = pratio(Mn1, gamma) * upstreamStaticPressure
+    T2 = tratio(Mn1, gamma) * upstreamStaticTemperature
+    r2 = rratio(Mn1, gamma) * upstreamStaticDensity
 
     # Stagnation State
-    p01 = p0(p1, M1, gamma)
+    p01 = p0(upstreamStaticPressure, machNumber, gamma)
     p02 = p0(p2, M2, gamma)
 
-    T01 = T0(T1, M1, gamma)
+    T01 = T0(upstreamStaticTemperature, machNumber, gamma)
     T02 = T0(T2, M2, gamma)
 
     result['p2'] = p2
@@ -196,7 +196,7 @@ def obliqueshock(theta, M1, p1, T1, r1, gamma):
     result['Mn1'] = Mn1
     result['Mn2'] = Mn2
 
-    result['M1'] = M1
+    result['M1'] = machNumber
     result['M2'] = M2
 
     result['p01'] = p01
@@ -208,12 +208,12 @@ def obliqueshock(theta, M1, p1, T1, r1, gamma):
     return result
 
 
-def findtheta(M1, M2, gamma):
+def findtheta(upstreamMachNumber, downstreamMachNumber, gamma):
     """Returns the ramp angle, theta, needed to form an oblique shock to go from M1 to M2 assuming that the t-b-M
     relationship is valid.
 
-    :param M1: upstream Mach
-    :param M2: downstream Mach
+    :param upstreamMachNumber: upstream Mach
+    :param downstreamMachNumber: downstream Mach
     :param gamma: ratio of specific heats
     :return: theta - ramp angle in radians that would result in a valid oblique shock to go from M1 to M2
     """
@@ -233,13 +233,13 @@ def findtheta(M1, M2, gamma):
 
     # 100 Newton-Raphson iterations to solve for turn angle, theta; uses numerical central difference for derivative
     for i in range(100):
-        num = obliqueshock(theta, M1, P1, T1, r1, gamma)
-        num = num['M2'] - M2
+        num = obliqueshock(theta, upstreamMachNumber, P1, T1, r1, gamma)
+        num = num['M2'] - downstreamMachNumber
 
-        Upper = obliqueshock(theta + epi, M1, P1, T1, r1, gamma)
+        Upper = obliqueshock(theta + epi, upstreamMachNumber, P1, T1, r1, gamma)
         Upper = Upper['M2']
 
-        Lower = obliqueshock(theta - epi, M1, P1, T1, r1, gamma)
+        Lower = obliqueshock(theta - epi, upstreamMachNumber, P1, T1, r1, gamma)
         Lower = Lower['M2']
 
         denom = (Upper - Lower) / (2 * epi)
@@ -249,34 +249,34 @@ def findtheta(M1, M2, gamma):
     return theta
 
 
-def pmfunction(M, gamma):
+def pmfunction(machNumber, gamma):
     """Solves the Prandtl-Meyer formula for nu.
 
-    :param M: local Mach number
+    :param machNumber: local Mach number
     :param gamma: ratio of specific heats
     :return: nu from the Prandtl-Meyer formula
     """
 
-    term1 = math.sqrt((gamma + 1) / (gamma - 1)) * math.atan(math.sqrt((gamma - 1) / (gamma + 1) * (M ** 2 - 1)))
-    term2 = math.atan(math.sqrt(M ** 2 - 1))
+    term1 = math.sqrt((gamma + 1) / (gamma - 1)) * math.atan(math.sqrt((gamma - 1) / (gamma + 1) * (machNumber ** 2 - 1)))
+    term2 = math.atan(math.sqrt(machNumber ** 2 - 1))
 
     nu = term1 - term2
     return nu
 
 
-def pmfunctionp(M, gamma):
+def pmfunctionp(machNumber, gamma):
     """Derivative of the Prandtl-Meyer formula used in solving for Mach number after an expansion fan.
 
-    :param M: local Mach number
+    :param machNumber: local Mach number
     :param gamma: ratio of specific heats
     :return: nu prime
 
     """
-    C1 = ((gamma - 1) / (gamma + 1)) ** 0.5 * (M ** 2 - 1) ** 0.5
-    C2 = (M ** 2 - 1) ** 0.5
+    C1 = ((gamma - 1) / (gamma + 1)) ** 0.5 * (machNumber ** 2 - 1) ** 0.5
+    C2 = (machNumber ** 2 - 1) ** 0.5
 
-    dC1 = ((gamma - 1) / (gamma + 1)) ** 0.5 * M * (M ** 2 - 1) ** -0.5
-    dC2 = M * (M ** 2 - 1) ** -0.5
+    dC1 = ((gamma - 1) / (gamma + 1)) ** 0.5 * machNumber * (machNumber ** 2 - 1) ** -0.5
+    dC2 = machNumber * (machNumber ** 2 - 1) ** -0.5
 
     constant = ((gamma + 1) / (gamma - 1)) ** 0.5
     term1 = constant * dC1 / (1 + C1 ** 2)
@@ -286,10 +286,10 @@ def pmfunctionp(M, gamma):
     return nup
 
 
-def PMsolveM(theta, gamma):
+def PMsolveM(rampAngle, gamma):
     """Solves for the Mach number after an expansion with turn angle of theta in radians
 
-    :param theta: turn angle in radians
+    :param rampAngle: turn angle in radians
     :param gamma: ratio of specific heats
     :return: Mnew - Mach number after the turn angle
     """
@@ -298,46 +298,46 @@ def PMsolveM(theta, gamma):
 
     # Newton-Raphson as the solver for the post expansion Mach number
     for i in range(100):
-        Mnew = Mnew - (pmfunction(Mnew, gamma) - theta) / pmfunctionp(Mnew, gamma)
+        Mnew = Mnew - (pmfunction(Mnew, gamma) - rampAngle) / pmfunctionp(Mnew, gamma)
 
     return Mnew
 
 
-def PMexpansion(theta, M1, T1, p1, gamma):
+def PMexpansion(rampAngle, upstreamMachNumber, upstreamStaticTemperature, upstreamStaticPressure, gamma):
     """Solves for the state after an expansion with turn angle of theta in radians
 
-    :param theta: turn angle in radians
-    :param M1: upstream Mach number
-    :param T1: upstream static temperature
-    :param p1: upstream static pressure
+    :param rampAngle: turn angle in radians
+    :param upstreamMachNumber: upstream Mach number
+    :param upstreamStaticTemperature: upstream static temperature
+    :param upstreamStaticPressure: upstream static pressure
     :param gamma: ratio of specific heats
     :return: result - Dictionary that can be indexed to get M2, T2, and p2
     """
     # Solve for the Mach number
-    M2 = PMsolveM(theta + pmfunction(M1, gamma), gamma)
+    M2 = PMsolveM(rampAngle + pmfunction(upstreamMachNumber, gamma), gamma)
 
     # Temperature
-    T1_T2 = (1 + (gamma - 1) / 2 * M2 ** 2) / (1 + (gamma - 1) / 2 * M1 ** 2)
-    T2 = T1_T2 ** -1 * T1
+    T1_T2 = (1 + (gamma - 1) / 2 * M2 ** 2) / (1 + (gamma - 1) / 2 * upstreamMachNumber ** 2)
+    T2 = T1_T2 ** -1 * upstreamStaticTemperature
 
     # Pressure
     P1_P2 = T1_T2 ** (gamma / (gamma - 1))
-    p2 = P1_P2 ** -1 * p1
+    p2 = P1_P2 ** -1 * upstreamStaticPressure
 
     result = {'M2': M2, 'T2': T2, 'p2': p2}
     return result
 
 
 @njit(cache=True)
-def sutherland_viscosity(t, mu_ref, t_ref, S):
+def sutherland_viscosity(temperature, referenceViscosity, referenceTemperature, sutherlandConstant=111):
     """Calculates the viscosity using Sutherland's model for a given temperature.
 
-    :param t: Temperature to evaluate viscosity at
-    :param mu_ref: Reference viscosity (1.716e-5 Pa*s for CPG air)
-    :param t_ref: Reference temperature (273 K for CPG air)
-    :param S: Sutherland reference constant (111 K for CPG air)
+    :param temperature: Temperature to evaluate viscosity at
+    :param referenceViscosity: Reference viscosity (1.716e-5 Pa*s for CPG air)
+    :param referenceTemperature: Reference temperature (273 K for CPG air)
+    :param sutherlandConstant: Sutherland reference constant (111 K for CPG air)
     :return: mu - kinematic viscosity at temperature t
     """
-    mu = np.multiply(np.multiply(mu_ref, np.power(t / t_ref, 1.5)), np.divide((t_ref + S), (t + S)))
+    mu = np.multiply(np.multiply(referenceViscosity, np.power(temperature / referenceTemperature, 1.5)), np.divide((referenceTemperature + sutherlandConstant), (temperature + sutherlandConstant)))
 
     return mu

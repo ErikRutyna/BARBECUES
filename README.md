@@ -12,11 +12,11 @@ The solver also has another utility that can be used to generate meshes called
 the G.R.I.L.S Mesher (*.GRI Level Set Mesher). The mesher  is similar in 
 architecture to the DistMesh (in that it runs the core underlying level-set 
 based method for producing high quality meshes), but has some of its own 
-features and changes. Some examples of how to use GRIFT can be seen in 
+features and changes. Some examples of how to use G.R.I.L.S can be seen in 
 the "mesh_generation.py" script.
 
 NOTE: There appear to be some issues regarding freestream conditions with 
-different initialization methods and getting the flowfield to converge. It is
+different initialization methods and getting the flow field to converge. It is
 recommended to use either "freestream" or "exp" based initialization methods.
 
 ## Boundary Conditions

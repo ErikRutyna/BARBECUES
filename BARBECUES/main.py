@@ -46,6 +46,23 @@ def main():
     demoMesh.addFlowfield(demoFlowfield)
     demoFlowfield.addUnstructuredMesh(demoMesh)
 
+    # Plot initial information
+
+    # Run the residual assembly algorithm
+    print('Solving initial flow field!\n')
+
+    # Execute mesh refinement and additional residual assembly runs if applicable
+    for i in range(config['adaptive_cycles']):
+        # Mesh refinement
+        print("Refining Mesh!\n")
+
+        print("Mesh refinement complete!\n")
+
+        # Residual assembly
+        print('Solving on refined mesh: {0}!\n'.format(i))
+
+    # Plot/post-process any output files
+
 
     # Plot the solution & generate output file
     runtime = timeit.default_timer() - timeSimulationStart
@@ -54,5 +71,4 @@ def main():
     return
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == '__main__': main()
