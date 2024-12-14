@@ -1,0 +1,51 @@
+---
+project:
+- mesh_path: "../Meshes/demoDiamond.gri"
+  restart_files: false
+  filename: demoDiamond
+inviscid_flux:
+- flux_method: roe
+  flux_limiter: superbee
+adaptation:
+- adaptive_cycles: 2
+- adaptation_percentage: 0.075
+convergence:
+- convergence_method: smart
+  convergence_minimum: 1.0e-05
+  smart_convergence_minimum: 0.01
+  smart_convergence_length: 50
+  smart_convergence_error_tol: 0.025
+  smart_convergence_parameters:
+  - cl
+  - cd
+  - clcd
+preprocessing:
+- initialization: freestream
+  plots: true
+postprocessing:
+- plots:
+    mesh: true
+    m: true
+    u: true
+    v: true
+    p: true
+    t: true
+    rho: true
+    p0: true
+    t0: true
+    rho0: true
+    cl: true
+    cd: true
+    cp: true
+    re: true
+fluid:
+- name: CPG_Air
+  cp: 1005
+  cv: 718
+  MW: 0.0289647
+  reference_viscosity: 1.716e-05
+  reference_viscosity_temperature: 273
+  reference_viscosity_constant: 111
+freestream:
+- mach: 3
+  angle_of_attack: 5

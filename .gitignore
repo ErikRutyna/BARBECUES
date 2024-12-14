@@ -19,3 +19,6 @@ git_commands.txt
 solver.prof
 
 BARBECUES/config.json
+
+*.nbc
+*.nbi
