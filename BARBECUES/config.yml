@@ -2,6 +2,7 @@
 project:
 - mesh_path: "../Meshes/demoDiamond.gri"
   restart_files: false
+  final_state: false
   filename: demoDiamond
 inviscid_flux:
 - flux_method: roe
@@ -19,25 +20,27 @@ convergence:
   - cl
   - cd
   - clcd
+  maxIterations: 1000
 preprocessing:
 - initialization: freestream
   plots: true
 postprocessing:
 - plots:
     mesh: true
-    m: true
-    u: true
-    v: true
-    p: true
-    t: true
-    rho: true
-    p0: true
-    t0: true
-    rho0: true
-    cl: true
-    cd: true
-    cp: true
-    re: true
+    Mach: true
+    U: true
+    V: true
+    P: true
+    T: true
+    Rho: true
+    StagP: true
+    StagT: true
+    StagRho: true
+    CL: true
+    CD: true
+    CLCD: true
+    CP: true
+    Residuals: true
 fluid:
 - name: CPG_Air
   cp: 1005
@@ -47,5 +50,5 @@ fluid:
   reference_viscosity_temperature: 273
   reference_viscosity_constant: 111
 freestream:
-- mach: 3
-  angle_of_attack: 5
+- mach: 2
+  angle_of_attack: 0

@@ -1,4 +1,4 @@
-from BARBECUES.flowfield.initialization import initializeFreestream
+from BARBECUES.flowfield.initialization import *
 import math
 import numpy as np
 

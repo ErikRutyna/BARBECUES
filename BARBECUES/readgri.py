@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 from scipy import sparse
 import math
-from BARBECUES.flux import flux_roe
+from BARBECUES.flux import roe
 
 
 def edgehash2(E, B):

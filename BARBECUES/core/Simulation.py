@@ -1,5 +1,7 @@
 from BARBECUES.mesh import UnstructuredMesh
 from BARBECUES.flowfield import UnstructuredFlowfield
+from BARBECUES.utilities.plotting import *
+
 
 class Simulation:
 
@@ -16,12 +18,13 @@ class Simulation:
         self.unstructuredMesh.unstructuredFlowfield = self.unstructuredFlowfield
 
         # Preprocessing routine
+        self.preprocess()
 
         # Simulation execution
+        self.executeSimulation()
 
         # Postprocessing routine
-
-
+        self.postprocess()
 
     # Grab the mesh and have it self-initialize with all the necessary information
     def loadMesh(self):
@@ -31,6 +34,18 @@ class Simulation:
     def generateFlowfield(self):
         self.unstructuredFlowfield = UnstructuredFlowfield.UnstructuredFlowfield(self)
 
+    def preprocess(self):
+        if self.config['postprocessing'][0]['plots']['mesh']:
+            plotMesh.plotMesh(self.unstructuredMesh.nodes, self.unstructuredMesh.elements,
+                              self.unstructuredMesh.boundaryEdges, self.unstructuredMesh.boundaryName,
+                              self.config['project'][0]['filename'] + "_mesh_0.png")
+        if self.config['postprocessing'][0]['plots']['Mach']:
+            plotMach.plotMach(self.unstructuredMesh.nodes, self.unstructuredMesh.elements,
+                              self.unstructuredFlowfield.stateVectors, self.unstructuredFlowfield.gamma,
+                              self.config['project'][0]['filename'] + "_Mach_0.png")
 
     def executeSimulation(self):
+        pass
+
+    def postprocess(self):
         pass

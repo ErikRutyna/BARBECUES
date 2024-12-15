@@ -1,6 +1,6 @@
 from numba import njit
 import numpy as np
-from BARBECUES.flux import flux_roe
+from BARBECUES.flux import roe
 
 
 @njit(cache=True)
