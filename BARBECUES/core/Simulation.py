@@ -1,6 +1,8 @@
 from BARBECUES.mesh import UnstructuredMesh
 from BARBECUES.flowfield import UnstructuredFlowfield
 from BARBECUES.utilities.plotting import *
+from BARBECUES.residualAssembly.firstOrder import convergeFirstOrder
+from BARBECUES.residualAssembly.secondOrder import convergeSecondOrder
 
 
 class Simulation:
@@ -45,7 +47,18 @@ class Simulation:
                               self.config['project'][0]['filename'] + "_Mach_0.png")
 
     def executeSimulation(self):
-        pass
+        match self.config['inviscid_flux'][0]['order']:
+            case 1:
+                convergeFirstOrder.convergeFirstOrder()
+            case 2:
+                pass
 
     def postprocess(self):
-        pass
+        if self.config['postprocessing'][0]['plots']['mesh']:
+            plotMesh.plotMesh(self.unstructuredMesh.nodes, self.unstructuredMesh.elements,
+                              self.unstructuredMesh.boundaryEdges, self.unstructuredMesh.boundaryName,
+                              self.config['project'][0]['filename'] + "_mesh_final.png")
+        if self.config['postprocessing'][0]['plots']['Mach']:
+            plotMach.plotMach(self.unstructuredMesh.nodes, self.unstructuredMesh.elements,
+                              self.unstructuredFlowfield.stateVectors, self.unstructuredFlowfield.gamma,
+                              self.config['project'][0]['filename'] + "_Mach_final.png")
