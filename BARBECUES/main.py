@@ -57,7 +57,7 @@ def main():
     # Run residual assembly and solve for the flow field
     flowfieldResiduals, aerodynamicCoefficients = ra.euler_2D_v2(mesh['E'], mesh['V'], mesh['BE'], mesh['IE'],
                                                                  stateVectors,
-                                                                 config['freestream_mach_numer'],
+                                                                 config['freestream_mach_number'],
                                                                  config['angle_of_attack'],
                                                                  config['y'],
                                                                  config['flux_method'],
@@ -104,7 +104,7 @@ def main():
         print('\nPerforming solve on adapted mesh #: {0}.\n'.format(i+1))
         flowfieldResiduals, aerodynamicCoefficients = ra.euler_2D_v2(mesh['E'], mesh['V'], mesh['BE'], mesh['IE'],
                                                                      stateVectors,
-                                                                     config['freestream_mach_numer'],
+                                                                     config['freestream_mach_number'],
                                                                      config['angle_of_attack'],
                                                                      config['y'],
                                                                      config['flux_method'],

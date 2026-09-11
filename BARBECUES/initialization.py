@@ -145,23 +145,23 @@ def init_state(mesh, config):
     :return: Nx4 array of 1x4 state vectors [rho, rho*U, rho*V, rho*E]
     """
     if config['init'] == 'freestream': state = initialize_boundary(mesh['E'].shape[0],
-                                                                   config['freestream_mach_numer'],
+                                                                   config['freestream_mach_number'],
                                                                    config['angle_of_attack'],
                                                                    config['y'])
     if config['init'] == 'weak': state = initialize_boundary(mesh['E'].shape[0],
-                                                                  config['freestream_mach_numer'] / 2,
+                                                                  config['freestream_mach_number'] / 2,
                                                                   config['angle_of_attack'],
                                                                   config['y'])
     if config['init'] == 'linear': state = initialize_boundary_dist_linear(mesh['E'], mesh['V'],
-                                                                      config['freestream_mach_numer'],
+                                                                      config['freestream_mach_number'],
                                                                       config['angle_of_attack'],
                                                                       config['y'])
     if config['init'] == 'exp': state = initialize_boundary_dist_exp(mesh['E'], mesh['V'],
-                                                                      config['freestream_mach_numer'],
+                                                                      config['freestream_mach_number'],
                                                                       config['angle_of_attack'],
                                                                       config['y'])
     if config['init'] == 'moc': state = imoc.initialize_moc(mesh['E'], mesh['V'], mesh['BE'],
-                                                                      config['freestream_mach_numer'],
+                                                                      config['freestream_mach_number'],
                                                                       config['angle_of_attack'],
                                                                       config['y'])
     return state

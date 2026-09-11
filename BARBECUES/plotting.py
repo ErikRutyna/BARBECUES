@@ -169,7 +169,7 @@ def plot_moc(E, V, BE, moc, fname):
     """
     f = plt.figure(figsize=(12,12))
     # Plots all the triangles in the mesh in black
-    plt.triplot(V[:,0], V[:,1], E, '-', color='black')
+    plt.triplot(V[:,0], V[:,1], E, '-', color='white')
     # Plots all the boundaries in their unique color scheme
     for i in range(BE.shape[0]):
         if BE[i, 3] == 0:

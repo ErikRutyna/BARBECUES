@@ -33,6 +33,13 @@ def edgePropertiesCalculator(edgeIndices, V):
     norm = np.transpose(norm)
     return length, norm
 
+@njit(cache=True)
+def edge_properties_calculator(node_a, node_b):
+
+    length = math.sqrt((node_b[0] - node_a[0]) ** 2 + (node_b[1] - node_a[1]) ** 2)
+    norm = np.array([(node_b[1] - node_a[1]) / length, (node_a[0] - node_b[0]) / length])
+
+    return length, norm
 
 @njit(cache=True)
 def areaCalculator(E, V):

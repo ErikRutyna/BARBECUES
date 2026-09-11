@@ -28,7 +28,7 @@ def preprocess():
     flight_con['tinf'] = 300
     flight_con['pinf'] = 20000
     flight_con['r_inf'] = flight_con['pinf'] / (fluid_con['R'] * flight_con['tinf'])
-    flight_con['U_inf'] = flight_con['freestream_mach_numer'] * math.sqrt(
+    flight_con['U_inf'] = flight_con['freestream_mach_number'] * math.sqrt(
         fluid_con['y'] * fluid_con['R'] * flight_con['tinf'])
     flight_con['mu_inf'] = cff.sutherland_viscosity(flight_con['tinf'], fluid_con['viscosity_ref'], fluid_con['viscosity_ref_temp'], fluid_con['viscosity_ref_S'])
     flight_con['Rex_inf'] = flight_con['U_inf'] * flight_con['r_inf'] / flight_con['mu_inf']

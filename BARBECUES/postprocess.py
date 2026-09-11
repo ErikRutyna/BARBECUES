@@ -56,7 +56,7 @@ def postprocess(mesh, state, coefficients, residuals, config, i, t):
 
     # Flight control conditions
     f.write('Flight Conditions:\n')
-    f.write('Freestream Mach Number, M_inf: {0}\n'.format(config['freestream_mach_numer']))
+    f.write('Freestream Mach Number, M_inf: {0}\n'.format(config['freestream_mach_number']))
     f.write('Freestream Velocity, U_inf: {0} m/s\n'.format(config['U_inf']))
     f.write('Freestream AoA, alpha: {0} deg\n'.format(config['angle_of_attack']))
     f.write('Freestream Altitude, h: {0} m\n\n'.format(config['altitude']))

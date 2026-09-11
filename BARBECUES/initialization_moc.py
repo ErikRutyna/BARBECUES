@@ -212,11 +212,18 @@ def moc_reflect(V, BE, M, a, y, moc_lines):
                 # normal vector of the boundary edge that is reflected on
                 upstream_length = np.linalg.norm(moc_lines[i][-1, :] - moc_lines[i][-2, :])
                 upstream_norm = (moc_lines[i][-1, :] - moc_lines[i][-2, :]) / upstream_length
-                _, be_n = cgf.edge_properties_calculator(V[intersection_be[0]], V[intersection_be[1]])
+
+                deltaX = V[intersection_be[0], 0] - V[intersection_be[1], 0]
+                deltaY = V[intersection_be[0], 1] - V[intersection_be[1], 1]
+
+                length = np.sqrt(np.multiply(deltaX, deltaX) + np.multiply(deltaY, deltaY))
+
+                norm = np.vstack((np.divide(-deltaY, length), np.divide(deltaX, length)))
+                be_n = np.transpose(norm)
 
                 # Computes the normal vector after an assumed specular reflection
                 downstream_norm = upstream_norm - 2 * be_n * np.dot(be_n, upstream_norm)
-                downstream_slope = downstream_norm[1] / downstream_norm[0]
+                downstream_slope = downstream_norm[0][1] / downstream_norm[0][0]
 
                 # Projects the vector downstream of reflection to the edge of the domain
                 dx = xlim[1] - moc_lines[i][-1, 0]
